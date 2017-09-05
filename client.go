@@ -1,7 +1,7 @@
 package main
 
 import (
-	tnetstring "github.com/edsrzf/tnetstring-go"
+	"github.com/yawn/netstring"
     "golang.org/x/net/websocket"
 	"fmt"
 	"os"
@@ -9,10 +9,6 @@ import (
 	"log"
 )
 
-type Message struct {
-	Tube string
-	Payload string
-}
 
 const address string = "localhost:1234"
 
@@ -27,34 +23,29 @@ func main() {
     i := 0
     for {
 		i++
-		msg := &Message{
-			Tube: "random",
-			Payload: "GARBAGE",
-		}
-		msg_str, err := tnetstring.Marshal(&msg)
+		msg, err := netstring.Encode([]byte("foo"), []byte("bar"))
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = websocket.Message.Send(ws, msg_str)
+		err = websocket.Message.Send(ws, msg)
 		if err != nil {
-			fmt.Printf("Send failed: %s\n", err.Error())
-			os.Exit(1)
+			fmt.Printf("Write failed: %s\n", err.Error())
+			os.Exit(1e3)
 		}
 		fmt.Println(i)
-		time.Sleep(1e9)
+		time.Sleep(1e3)
 	}
 }
 
 
 func readClientMessages(ws *websocket.Conn) {
     for {
-        var message string
-        // err := websocket.JSON.Receive(ws, &message)
+        var message []byte
         err := websocket.Message.Receive(ws, &message)
         if err != nil {
             fmt.Printf("Error::: %s\n", err.Error())
             return
         }
-        fmt.Println(message)
+        fmt.Println(string(message))
     }
 }
