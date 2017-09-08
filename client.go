@@ -1,4 +1,4 @@
-package main
+package franz
 
 import (
 	"github.com/yawn/netstring"
