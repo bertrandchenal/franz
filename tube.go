@@ -1,18 +1,21 @@
 package franz
 
 import (
-	// "fmt"
+	"encoding/binary"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
 )
 
 type Tube struct {
-	Root    string
-	buckets int64arr
+	Root          string
+	buckets       int64arr
+	MaxBucketSize int64
 }
 
 // func intToHex(i int64) {
@@ -62,8 +65,55 @@ func NewTube(root string) *Tube {
 	return tube
 }
 
-// func (self *Tube) Append(data []byte) error {
-// }
+func (self *Tube) GetBucket(offset int64) string {
+	var bucket_id int64
+	if len(self.buckets) == 0 {
+		bucket_id = 0
+	} else if offset < 0 {
+		bucket_id = self.buckets[len(self.buckets)-1]
+	} else {
+		panic("TODO")
+	}
+	return fmt.Sprintf("%016x", bucket_id)
+}
+
+func (self *Tube) Append(data []byte) error {
+	bucket_name := self.GetBucket(-1)
+	filename := path.Join(self.Root, bucket_name)
+	// Append data to bucket file
+	fh, err := os.OpenFile(filename+".franz", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
+	info, err := fh.Stat()
+	if err != nil {
+		return err
+	}
+	offset := info.Size()
+
+	if err != nil {
+		return err
+	}
+	_, err = fh.Write(data)
+	if err != nil {
+		return err
+	}
+	err = fh.Close()
+	if err != nil {
+		return err
+	}
+
+	// Append file size to offset file
+	fh, err = os.OpenFile(filename+".idx", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
+	if err != nil {
+		return err
+	}
+	buff := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buff, uint64(offset))
+	_, err = fh.Write(buff)
+	if err != nil {
+		return err
+	}
+	err = fh.Close()
+	return err
+}
 
 // func (self *Tube) Read(offset int64) ([]byte, error) {
 // }
