@@ -1,6 +1,7 @@
 package franz
 
 import (
+	// "golang.org/x/exp/mmap"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
@@ -13,17 +14,29 @@ import (
 	"time"
 )
 
-type Tube struct {
-	Root          string
-	buckets       int64arr
-	MaxBucketSize int64
+const MaxBucketSize = int64(4294967294) // 2^32-1
+
+type Bucket struct {
+	Offset int64
+	Size int64
 }
 
-type int64arr []int64
+type BucketList []Bucket
 
-func (a int64arr) Len() int           { return len(a) }
-func (a int64arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a int64arr) Less(i, j int) bool { return a[i] < a[j] }
+type Tube struct {
+	Root          string
+	buckets       BucketList
+}
+
+func (buckets BucketList) Len() int {
+	return len(buckets)
+}
+func (buckets BucketList) Swap(i, j int) {
+	buckets[i], buckets[j] = buckets[j], buckets[i]
+}
+func (buckets BucketList) Less(i, j int) bool {
+	return buckets[i].Offset < buckets[j].Offset
+}
 
 // func intToHex(i int64) {
 // 	val, err := fmt.Sprintf("%016x", i)
@@ -36,34 +49,32 @@ func (a int64arr) Less(i, j int) bool { return a[i] < a[j] }
 // 	return fmt.Sprintf("%016x", i)
 // }
 
-func NewTube(root string) *Tube {
-	// TODO
-	// - create directory, blob & index files if none found
-	// - create metadata file (with list of buckets their start time,
-	//   start offset, and some descriptions
-	// - instanciate mmap
-
+func ScanBuckets(root string)  BucketList{
 	os.MkdirAll(root, 0750)
 	files, err := ioutil.ReadDir(root)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	var buckets int64arr
-	var bucket_id int64
+	var buckets BucketList
+	var bucket_offset int64
 	for _, file := range files {
 		splitted := strings.Split(file.Name(), ".")
 		if len(splitted) != 2 {
 			continue
 		}
 		if splitted[1] == "franz" {
-			if bucket_id, err = strconv.ParseInt(splitted[0], 16, 64); err != nil {
+			if bucket_offset, err = strconv.ParseInt(splitted[0], 16, 64); err != nil {
 				log.Fatal(err)
 			}
-			buckets = append(buckets, bucket_id)
+			buckets = append(buckets, Bucket{bucket_offset, file.Size()})
 		}
 	}
+	return buckets
+}
 
+func NewTube(root string) *Tube {
+	buckets := ScanBuckets(root)
 	sort.Sort(buckets)
 	tube := &Tube{
 		Root:    root,
@@ -72,23 +83,40 @@ func NewTube(root string) *Tube {
 	return tube
 }
 
-func (self *Tube) GetBucket(offset int64) string {
-	var bucket_id int64
-	if len(self.buckets) == 0 {
-		bucket_id = 0
-	} else if offset < 0 {
-		bucket_id = self.buckets[len(self.buckets)-1]
-	} else {
-		panic("TODO")
+func (self *Tube) GetBucket(offset int64) Bucket {
+	var bucket Bucket
+	pos := sort.Search(len(self.buckets), func(i int) bool {return self.buckets[i].Offset >= offset })
+	bucket = self.buckets[pos]
+	return bucket
+}
+
+// Write bucket ? tail bucket ? hot bucket ?
+func (self *Tube) GetWriteBucket(chunk_size int64) Bucket {
+	if chunk_size > MaxBucketSize {
+		panic("Chunk size bigger that MaxBucketSize")
 	}
-	return fmt.Sprintf("%016x", bucket_id)
+	if len(self.buckets) == 0 {
+		return Bucket{0, 0}
+	}
+
+	last_bucket := self.buckets[len(self.buckets)-1]
+	if last_bucket.Size + chunk_size > MaxBucketSize {
+		new_bucket := Bucket{
+			Offset: last_bucket.Offset + last_bucket.Size,
+			Size: 0,
+		}
+		self.buckets = append(self.buckets, new_bucket)
+		return new_bucket
+	}
+	return last_bucket
 }
 
 func (self *Tube) Append(data []byte, extra_indexes ...string) error {
-	bucket_name := self.GetBucket(-1)
+	bucket_id := self.GetWriteBucket(int64(len(data) * 8))
+	bucket_name := fmt.Sprintf("%016x", bucket_id)
 	filename := path.Join(self.Root, bucket_name)
 	// Append data to bucket file
-	fh, err := os.OpenFile(filename+".franz", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
+	fh, err := os.OpenFile(filename + ".franz", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
 	info, err := fh.Stat()
 	if err != nil {
 		return err
@@ -111,9 +139,9 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
 	timestamp_buff := make([]byte, 4)
 	binary.LittleEndian.PutUint32(offset_buff, uint32(offset))
-	binary.LittleEndian.PutUint32(timestamp_buff, int32(time.Now().Unix()))
-	data := append(offset_buff, timestamp_buff...)
-	err = self.UpdateIndex(filename, data)
+	binary.LittleEndian.PutUint32(timestamp_buff, uint32(time.Now().Unix()))
+	idx_row := append(offset_buff, timestamp_buff...)
+	err = self.UpdateIndex(filename, idx_row)
 	if err != nil {
 		return err
 	}
@@ -144,5 +172,6 @@ func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
 
 // func (self *Tube) Read(offset int64) ([]byte, error) {
 // }
-// func (self *Tube) Info() ?? {
+
+// func (self *Tube) Info()  {
 // }
