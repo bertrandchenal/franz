@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Tube struct {
@@ -111,7 +112,7 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 	timestamp_buff := make([]byte, 4)
 	binary.LittleEndian.PutUint32(offset_buff, uint32(offset))
 	binary.LittleEndian.PutUint32(timestamp_buff, int32(time.Now().Unix()))
-	data := append(offset_buff, timestamp_buff)
+	data := append(offset_buff, timestamp_buff...)
 	err = self.UpdateIndex(filename, data)
 	if err != nil {
 		return err
