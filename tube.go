@@ -106,14 +106,16 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 		return err
 	}
 
-	// Append file size to offset files (aka indexes)
-	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit, add timestamp
+	// Append file size and timestamp to indexes
+	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
+	timestamp_buff := make([]byte, 4)
 	binary.LittleEndian.PutUint32(offset_buff, uint32(offset))
-	err = self.UpdateIndex(filename, offset_buff)
+	binary.LittleEndian.PutUint32(timestamp_buff, int32(time.Now().Unix()))
+	data := append(offset_buff, timestamp_buff)
+	err = self.UpdateIndex(filename, data)
 	if err != nil {
 		return err
 	}
-
 	for _, idx := range extra_indexes {
 		err = self.UpdateIndex(filename + "-" + idx, offset_buff)
 		if err != nil {
