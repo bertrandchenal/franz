@@ -18,6 +18,12 @@ type Tube struct {
 	MaxBucketSize int64
 }
 
+type int64arr []int64
+
+func (a int64arr) Len() int           { return len(a) }
+func (a int64arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a int64arr) Less(i, j int) bool { return a[i] < a[j] }
+
 // func intToHex(i int64) {
 // 	val, err := fmt.Sprintf("%016x", i)
 // 	if err != nil {
@@ -77,7 +83,7 @@ func (self *Tube) GetBucket(offset int64) string {
 	return fmt.Sprintf("%016x", bucket_id)
 }
 
-func (self *Tube) Append(data []byte) error {
+func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 	bucket_name := self.GetBucket(-1)
 	filename := path.Join(self.Root, bucket_name)
 	// Append data to bucket file
@@ -100,29 +106,40 @@ func (self *Tube) Append(data []byte) error {
 		return err
 	}
 
-	// Append file size to offset file
-	fh, err = os.OpenFile(filename+".idx", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
+	// Append file size to offset files (aka indexes)
+	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit, add timestamp
+	binary.LittleEndian.PutUint32(offset_buff, uint32(offset))
+	err = self.UpdateIndex(filename, offset_buff)
 	if err != nil {
 		return err
 	}
-	buff := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buff, uint64(offset))
-	_, err = fh.Write(buff)
+
+	for _, idx := range extra_indexes {
+		err = self.UpdateIndex(filename + "-" + idx, offset_buff)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
+	fh, err := os.OpenFile(index_name+".idx", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
+	if err != nil {
+		return err
+	}
+	_, err = fh.Write(offset)
 	if err != nil {
 		return err
 	}
 	err = fh.Close()
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // func (self *Tube) Read(offset int64) ([]byte, error) {
 // }
-
 // func (self *Tube) Info() ?? {
 // }
-
-type int64arr []int64
-
-func (a int64arr) Len() int           { return len(a) }
-func (a int64arr) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a int64arr) Less(i, j int) bool { return a[i] < a[j] }
