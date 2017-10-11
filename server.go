@@ -1,4 +1,4 @@
-package franz
+package main
 
 import (
 	// "golang.org/x/exp/mmap" 
@@ -14,6 +14,8 @@ import (
 
 func Echo(ws *websocket.Conn) {
     var err error
+	addr := ws.RemoteAddr().String()
+	println(addr)
 
     for {
         var reply []byte
@@ -38,7 +40,7 @@ func Echo(ws *websocket.Conn) {
     }
 }
 
-func serve() {
+func main() {
     http.Handle("/ws", websocket.Handler(Echo))
 	println("Server started")
     if err := http.ListenAndServe(":1234", nil); err != nil {

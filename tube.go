@@ -164,10 +164,12 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 }
 
 func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
+	// Open index file
 	fh, err := os.OpenFile(index_name+".idx", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
 	if err != nil {
 		return err
 	}
+	// Append offset
 	_, err = fh.Write(offset)
 	if err != nil {
 		return err

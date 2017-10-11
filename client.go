@@ -1,4 +1,4 @@
-package franz
+package main
 
 import (
 	"github.com/yawn/netstring"
@@ -33,7 +33,7 @@ func main() {
 			os.Exit(1e3)
 		}
 		fmt.Println(i)
-		time.Sleep(1e3)
+		time.Sleep(1e9)
 	}
 }
 

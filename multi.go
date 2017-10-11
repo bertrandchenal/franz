@@ -51,18 +51,3 @@ func Subscriber(in chan int) {
 }
 
 
-// func main() {
-// 	pub_signal := make(chan struct{})
-// 	sub_a := make(chan int)
-// 	sub_b := make(chan int)
-// 	subs := []chan int{sub_a, sub_b}
-// 	go Publisher(pub_signal, subs)
-// 	go Subscriber(sub_a)
-// 	go Subscriber(sub_b)
-
-
-// 	time.Sleep(3e9)
-// 	close(pub_signal)
-// 	time.Sleep(1e9)
-// 	println("main done")
-// }
