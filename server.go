@@ -1,4 +1,4 @@
-package main
+package franz
 
 import (
 	// "golang.org/x/exp/mmap" 
@@ -6,7 +6,6 @@ import (
 	"github.com/yawn/netstring"
     // "fmt"
     "log"
-    "net/http"
 	// "path"
 )
 
@@ -37,13 +36,5 @@ func Echo(ws *websocket.Conn) {
             log.Println("[SEND]", err)
             break
         }
-    }
-}
-
-func main() {
-    http.Handle("/ws", websocket.Handler(Echo))
-	println("Server started")
-    if err := http.ListenAndServe(":1234", nil); err != nil {
-        log.Fatal("ListenAndServe:", err)
     }
 }
