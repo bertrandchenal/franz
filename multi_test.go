@@ -1,26 +1,19 @@
 package franz
 
 import (
-	"time"
 	"testing"
 )
 
-func TestPubSub(t *testing.T) {
+func TestHub(t *testing.T) {
+	hub := NewHub()
 
-	pub_signal := make(chan struct{})
-	sub_a := make(chan int)
-	sub_b := make(chan int)
-	subs := map[int]chan int{
-		1: sub_a,
-		2: sub_b,
+	for i := 0; i < 5; i++ {
+		hub.Publish(i)
 	}
-	go Publisher(pub_signal, subs)
-	go Subscriber(sub_a)
-	go Subscriber(sub_b)
 
-
-	time.Sleep(3e9)
-	close(pub_signal)
-	time.Sleep(1e9)
-	println("main done")
+	for i := 0; i < 5; i++ {
+		resp_chan := hub.Subscribe(i)
+		value := <-resp_chan
+		println("got", value)
+	}
 }
