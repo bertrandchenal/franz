@@ -2,6 +2,7 @@ package franz
 
 import (
 	"testing"
+	"time"
 )
 
 func TestHub(t *testing.T) {
@@ -11,14 +12,20 @@ func TestHub(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		hub.Publish(i)
+		// Sleeping between each call to "force" ordering
+		time.Sleep(100000)
 	}
 
 	value := <-early_chan
-	println(value)
+	if value != 0 {
+		t.Error("Unexpected value:", value)
+	}
 
 	for i := 0; i < 5; i++ {
 		resp_chan := hub.Subscribe(i)
 		value := <-resp_chan
-		println("got", value)
+		if value != i {
+			t.Error("Unexpected value:", value)
+		}
 	}
 }
