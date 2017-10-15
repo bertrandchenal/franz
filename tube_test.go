@@ -64,7 +64,7 @@ func TestAppend(t *testing.T) {
 	// Check that actual contant is there
 	content, err := tube.Read(0)
 	for pos, b := range content {
-		if b !=  hello[pos] {
+		if b != hello[pos] {
 			t.Error("Unexpected value")
 		}
 	}

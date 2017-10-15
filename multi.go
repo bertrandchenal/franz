@@ -8,24 +8,24 @@ type Ticket struct {
 }
 
 type Hub struct {
-	pub_chan chan int          // Incoming publication
-	sub_chan chan *Ticket      // Incoming subscription
-	sub_pool map[int][]*Ticket // Pool of ticket (subscription not yet answered)
-	mutex    *sync.Mutex
-	data     []int
+	pub_chan    chan int     // Incoming publication
+	sub_chan    chan *Ticket // Incoming subscription
+	ticket_pool []*Ticket    // Pool of ticket (subscription not yet answered)
+	mutex       *sync.Mutex
+	data        []int
 }
 
 func NewHub() *Hub {
 	pub_chan := make(chan int)
 	sub_chan := make(chan *Ticket)
-	sub_pool := make(map[int][]*Ticket)
+	ticket_pool := make([]*Ticket, 0, 5)
 	mutex := &sync.Mutex{}
 	hub := &Hub{
-		pub_chan: pub_chan,
-		sub_chan: sub_chan,
-		sub_pool: sub_pool,
-		mutex:    mutex,
-		data:     make([]int, 0),
+		pub_chan:    pub_chan,
+		sub_chan:    sub_chan,
+		ticket_pool: ticket_pool,
+		mutex:       mutex,
+		data:        make([]int, 0),
 	}
 	// Start a bunch of workers
 	for i := 0; i < 5; i++ {
@@ -52,74 +52,29 @@ func (self *Hub) Scheduler() {
 			self.mutex.Lock()
 			// Append data
 			self.data = append(self.data, value)
-			for pos, tickets := range self.sub_pool {
-				for _, ticket := range tickets {
-					// Answer to subscribers
-					ticket.sub_chan <- self.data[ticket.offset]
-				}
-				// Clear pool
-				delete(self.sub_pool, pos)
+			for _, ticket := range self.ticket_pool {
+				// Answer to subscribers
+				ticket.sub_chan <- self.data[ticket.offset]
 			}
+			// Clear pool
+			self.ticket_pool = make([]*Ticket, 0, 5)
 			self.mutex.Unlock()
 		case ticket := <-self.sub_chan:
-			// Try to answer ticket if possible, if not queue it in the pool
-			if ticket.offset < len(self.data) {
-				ticket.sub_chan <- self.data[ticket.offset]
-			} else if ticket.offset > len(self.data) {
-				ticket.sub_chan <- -1
-			} else {
+			if ticket.offset == len(self.data) || ticket.offset == -1 {
+				// Queue tickets that reach the tail (or ask for it)
+				if ticket.offset == -1 {
+					ticket.offset = len(self.data)
+				}
 				self.mutex.Lock()
-				self.sub_pool[ticket.offset] = append(self.sub_pool[ticket.offset], ticket)
+				self.ticket_pool = append(self.ticket_pool, ticket)
 				self.mutex.Unlock()
+			} else if ticket.offset < len(self.data) {
+				// Answer directly with available data
+				ticket.sub_chan <- self.data[ticket.offset]
+			} else {
+				// Requested offset is out of bound
+				ticket.sub_chan <- -1
 			}
 		}
 	}
 }
-
-// func Waiter(sub chan int, wait_signal chan int, sub_id, value int) {
-// 	// if unsuscribe was done too late
-//     // defer func() {
-//     //     if r := recover(); r != nil {
-//     //         log.Printf("Panic: %v", r)
-//     //     }
-//     // }()
-
-// 	select {
-// 	case sub <- value + sub_id:
-// 		return
-// 	case <- time.After(500 * time.Millisecond):
-// 		println("waiter timeout!", sub_id)
-// 		wait_signal <- sub_id
-// 		return
-// 	}
-// }
-
-// func Publisher(pub_signal chan struct{}, subscribers map[int]chan int) {
-// 	wait_signal := make(chan int)
-// 	tick := time.Tick(100 * time.Millisecond)
-// 	step := 0
-// 	for {
-// 		select {
-// 		case died_sub := <- wait_signal:
-// 			println("DIED", died_sub)
-// 			delete(subscribers, died_sub)
-// 		case <- tick:
-// 			for i, s := range(subscribers) {
-// 				println("GO", i)
-// 				go Waiter(s, wait_signal, i, step)
-// 			}
-// 			step += 1
-// 		case <- pub_signal:
-// 			println("pub done")
-// 			return
-// 		}
-// 	}
-// }
-
-// func Subscriber(in chan int) {
-// 	for i:= range(in) {
-// 		time.Sleep(time.Duration(i * 100) * time.Millisecond)
-// 		println(i)
-// 	}
-// 	println("sub done")
-// }
