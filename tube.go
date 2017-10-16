@@ -26,9 +26,11 @@ type BucketList []Bucket
 type Tube struct {
 	Name    string
 	Root    string
+	Len     int64
 	buckets BucketList
 }
 
+// Makes BucketList sortable 
 func (buckets BucketList) Len() int {
 	return len(buckets)
 }
@@ -39,15 +41,7 @@ func (buckets BucketList) Less(i, j int) bool {
 	return buckets[i].Offset < buckets[j].Offset
 }
 
-// func intToHex(i int64) {
-// 	val, err := fmt.Sprintf("%016x", i)
-// 	if err != nil {
-// 	}
-// }
-// func hexToInt(s string) {
-// 	return fmt.Sprintf("%016x", i)
-// }
-
+// Loop on all files of the given directory and detect buckets
 func ScanBuckets(root string) BucketList {
 	os.MkdirAll(root, 0750)
 	files, err := ioutil.ReadDir(root)
@@ -75,10 +69,12 @@ func ScanBuckets(root string) BucketList {
 func NewTube(root string, name string) *Tube {
 	root = path.Join(root, name)
 	buckets := ScanBuckets(root)
+	tube_len := MaxOffset(buckets)
 	sort.Sort(buckets)
 	tube := &Tube{
 		Name:    name,
 		Root:    root,
+		Len: tube_len,
 		buckets: buckets,
 	}
 	return tube
@@ -93,8 +89,15 @@ func (self *Tube) GetBucket(offset int64) Bucket {
 	return bucket
 }
 
-// Write bucket ? tail bucket ? hot bucket ?
-func (self *Tube) GetWriteBucket(chunk_size int64) Bucket {
+func MaxOffset(buckets []Bucket) int64 {
+	if len(self.buckets) == 0 {
+		return 0
+	}
+	tail_bucket = buckets[len(buckets) - 1]
+	return tail_bucket.Offset + tail_bucket.Size
+}
+
+func (self *Tube) TailBucket(chunk_size int64) Bucket {
 	if chunk_size > MaxBucketSize {
 		panic("Chunk size bigger that MaxBucketSize")
 	}
@@ -106,22 +109,22 @@ func (self *Tube) GetWriteBucket(chunk_size int64) Bucket {
 		return new_bucket
 	}
 
-	// Check if the last bucket has enough place left for the chunk
+	// Check if the tail bucket has enough place left for the chunk
 	// size
-	last_bucket := self.buckets[len(self.buckets)-1]
-	if last_bucket.Size+chunk_size > MaxBucketSize {
+	tail_bucket := self.buckets[len(self.buckets)-1]
+	if tail_bucket.Size + chunk_size > MaxBucketSize {
 		new_bucket := Bucket{
-			Offset: last_bucket.Offset + last_bucket.Size,
+			Offset: tail_bucket.Offset + tail_bucket.Size,
 			Size:   0,
 		}
 		self.buckets = append(self.buckets, new_bucket)
 		return new_bucket
 	}
-	return last_bucket
+	return tail_bucket
 }
 
 func (self *Tube) Append(data []byte, extra_indexes ...string) error {
-	bucket := self.GetWriteBucket(int64(len(data) * 8))
+	bucket := self.TailBucket(int64(len(data) * 8))
 	bucket_name := strconv.FormatInt(bucket.Offset, 16)
 	filename := path.Join(self.Root, bucket_name)
 	// Append data to bucket file
@@ -130,7 +133,6 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 	if err != nil {
 		return err
 	}
-	offset := info.Size()
 
 	if err != nil {
 		return err
@@ -144,10 +146,14 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 		return err
 	}
 
+	// Update bucket size
+	bucket.Size += len(data)
+	self.Len += len(data)
+
 	// Append file size and timestamp to indexes
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
 	timestamp_buff := make([]byte, 4)
-	binary.LittleEndian.PutUint32(offset_buff, uint32(offset))
+	binary.LittleEndian.PutUint32(offset_buff, uint32(info.Size()))
 	binary.LittleEndian.PutUint32(timestamp_buff, uint32(time.Now().Unix()))
 	idx_row := append(offset_buff, timestamp_buff...)
 	err = self.UpdateIndex(filename, idx_row)
@@ -155,7 +161,7 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 		return err
 	}
 	for _, idx := range extra_indexes {
-		err = self.UpdateIndex(filename+"-"+idx, offset_buff)
+		err = self.UpdateIndex(filename + "-" + idx, offset_buff) // XXX idx_row ?
 		if err != nil {
 			return err
 		}
@@ -225,6 +231,3 @@ func (self *Tube) Read(offset int64) ([]byte, error) {
 	bucket_fh.ReadAt(chunk_content, int64(chunk_offset))
 	return chunk_content, nil
 }
-
-// func (self *Tube) Info()  {
-// }
