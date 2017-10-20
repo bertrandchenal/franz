@@ -10,6 +10,7 @@ import (
 const TEST_DIR = "test-dir"
 
 func cleanup() {
+	println("CLEANUP!")
 	files, err := ioutil.ReadDir(TEST_DIR)
 	if err != nil {
 		panic(err)

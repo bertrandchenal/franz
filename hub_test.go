@@ -6,6 +6,7 @@ import (
 )
 
 func TestHub(t *testing.T) {
+	cleanup()
 	tube := NewTube(".", TEST_DIR)
 	hub := NewHub(tube)
 
@@ -23,11 +24,14 @@ func TestHub(t *testing.T) {
 		t.Error("Unexpected value:", value)
 	}
 
+	offset := int64(0)
 	for i := 0; i < 5; i++ {
-		resp_chan := hub.Subscribe(0)
+		println(offset)
+		resp_chan := hub.Subscribe(offset)
 		value := <-resp_chan
 		if string(value.data) != string(hello) {
 			t.Error("Unexpected value:", value)
 		}
+		offset += int64(len(value.data))
 	}
 }

@@ -21,7 +21,7 @@ type Bucket struct {
 	Size   int64
 }
 
-type BucketList []Bucket
+type BucketList []*Bucket
 
 type Tube struct {
 	Name    string
@@ -60,7 +60,7 @@ func ScanBuckets(root string) BucketList {
 			if bucket_offset, err = strconv.ParseInt(splitted[0], 16, 64); err != nil {
 				log.Fatal(err)
 			}
-			buckets = append(buckets, Bucket{bucket_offset, file.Size()})
+			buckets = append(buckets, &Bucket{bucket_offset, file.Size()})
 		}
 	}
 	return buckets
@@ -80,16 +80,21 @@ func NewTube(root string, name string) *Tube {
 	return tube
 }
 
-func (self *Tube) GetBucket(offset int64) Bucket {
-	var bucket Bucket
+func (self *Tube) GetBucket(offset int64) *Bucket {
+	var bucket *Bucket
 	pos := sort.Search(len(self.buckets), func(i int) bool {
-		return self.buckets[i].Offset >= offset
+		b:= self.buckets[i]
+		return b.Offset + b.Size >= offset
 	})
+
+	if pos >= len(self.buckets){
+		return nil
+	}
 	bucket = self.buckets[pos]
 	return bucket
 }
 
-func MaxOffset(buckets []Bucket) int64 {
+func MaxOffset(buckets []*Bucket) int64 {
 	if len(buckets) == 0 {
 		return 0
 	}
@@ -97,14 +102,14 @@ func MaxOffset(buckets []Bucket) int64 {
 	return tail_bucket.Offset + tail_bucket.Size
 }
 
-func (self *Tube) TailBucket(chunk_size int64) Bucket {
+func (self *Tube) TailBucket(chunk_size int64) *Bucket {
 	if chunk_size > MaxBucketSize {
 		panic("Chunk size bigger that MaxBucketSize")
 	}
 
 	// No bucket yet, create it
 	if len(self.buckets) == 0 {
-		new_bucket := Bucket{0, 0}
+		new_bucket := &Bucket{0, 0}
 		self.buckets = append(self.buckets, new_bucket)
 		return new_bucket
 	}
@@ -113,13 +118,14 @@ func (self *Tube) TailBucket(chunk_size int64) Bucket {
 	// size
 	tail_bucket := self.buckets[len(self.buckets)-1]
 	if tail_bucket.Size+chunk_size > MaxBucketSize {
-		new_bucket := Bucket{
+		new_bucket := &Bucket{
 			Offset: tail_bucket.Offset + tail_bucket.Size,
 			Size:   0,
 		}
 		self.buckets = append(self.buckets, new_bucket)
 		return new_bucket
 	}
+	println("OLD", tail_bucket.Size)
 	return tail_bucket
 }
 
@@ -149,6 +155,7 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 	// Update bucket size
 	bucket.Size += int64(len(data))
 	self.Len += int64(len(data))
+	println(len(data), self.Len, bucket.Size, bucket.Offset)
 
 	// Append file size and timestamp to indexes
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
@@ -189,6 +196,10 @@ func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
 
 func (self *Tube) Read(offset int64) ([]byte, error) {
 	bucket := self.GetBucket(offset)
+	if bucket == nil {
+		err := fmt.Errorf("Offset %d does not exists in %q", offset, self.Name)
+		return nil, err
+	}
 	bucket_name := strconv.FormatInt(bucket.Offset, 16)
 	filename := path.Join(self.Root, bucket_name)
 	idx_fh, err := mmap.Open(filename + ".idx")
