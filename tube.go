@@ -30,7 +30,7 @@ type Tube struct {
 	buckets BucketList
 }
 
-// Makes BucketList sortable 
+// Makes BucketList sortable
 func (buckets BucketList) Len() int {
 	return len(buckets)
 }
@@ -74,7 +74,7 @@ func NewTube(root string, name string) *Tube {
 	tube := &Tube{
 		Name:    name,
 		Root:    root,
-		Len: tube_len,
+		Len:     tube_len,
 		buckets: buckets,
 	}
 	return tube
@@ -90,10 +90,10 @@ func (self *Tube) GetBucket(offset int64) Bucket {
 }
 
 func MaxOffset(buckets []Bucket) int64 {
-	if len(self.buckets) == 0 {
+	if len(buckets) == 0 {
 		return 0
 	}
-	tail_bucket = buckets[len(buckets) - 1]
+	tail_bucket := buckets[len(buckets)-1]
 	return tail_bucket.Offset + tail_bucket.Size
 }
 
@@ -112,7 +112,7 @@ func (self *Tube) TailBucket(chunk_size int64) Bucket {
 	// Check if the tail bucket has enough place left for the chunk
 	// size
 	tail_bucket := self.buckets[len(self.buckets)-1]
-	if tail_bucket.Size + chunk_size > MaxBucketSize {
+	if tail_bucket.Size+chunk_size > MaxBucketSize {
 		new_bucket := Bucket{
 			Offset: tail_bucket.Offset + tail_bucket.Size,
 			Size:   0,
@@ -147,8 +147,8 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 	}
 
 	// Update bucket size
-	bucket.Size += len(data)
-	self.Len += len(data)
+	bucket.Size += int64(len(data))
+	self.Len += int64(len(data))
 
 	// Append file size and timestamp to indexes
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
@@ -161,7 +161,7 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 		return err
 	}
 	for _, idx := range extra_indexes {
-		err = self.UpdateIndex(filename + "-" + idx, offset_buff) // XXX idx_row ?
+		err = self.UpdateIndex(filename+"-"+idx, offset_buff) // XXX idx_row ?
 		if err != nil {
 			return err
 		}

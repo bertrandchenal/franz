@@ -61,7 +61,7 @@ func TestAppend(t *testing.T) {
 		t.Error("Unexpected number of file")
 	}
 
-	// Check that actual contant is there
+	// Check that actual content is there
 	content, err := tube.Read(0)
 	for pos, b := range content {
 		if b != hello[pos] {
