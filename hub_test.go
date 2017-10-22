@@ -14,7 +14,7 @@ func TestHub(t *testing.T) {
 	hello := []byte("hello")
 
 	for i := 0; i < 5; i++ {
-		hub.Publish(Message{hello})
+		hub.Publish(Message{hello, success})
 		// Sleeping between each call to "force" ordering
 		time.Sleep(100000)
 	}
@@ -26,11 +26,13 @@ func TestHub(t *testing.T) {
 
 	offset := int64(0)
 	for i := 0; i < 5; i++ {
-		println(offset)
 		resp_chan := hub.Subscribe(offset)
 		value := <-resp_chan
+		if value.status == not_found {
+			continue
+		}
 		if string(value.data) != string(hello) {
-			t.Error("Unexpected value:", value)
+			t.Error("Unexpected value:", value.data)
 		}
 		offset += int64(len(value.data))
 	}

@@ -10,7 +10,6 @@ import (
 const TEST_DIR = "test-dir"
 
 func cleanup() {
-	println("CLEANUP!")
 	files, err := ioutil.ReadDir(TEST_DIR)
 	if err != nil {
 		panic(err)
@@ -50,7 +49,8 @@ func TestAppend(t *testing.T) {
 	}
 
 	//append with tags
-	err = tube.Append(hello, "ham", "spam")
+	world := []byte("world")
+	err = tube.Append(world, "ham", "spam")
 	if err != nil {
 		t.Error(err)
 	}
@@ -64,9 +64,18 @@ func TestAppend(t *testing.T) {
 
 	// Check that actual content is there
 	content, err := tube.Read(0)
-	for pos, b := range content {
-		if b != hello[pos] {
-			t.Error("Unexpected value")
-		}
+	if err != nil {
+		panic(err)
+	}
+	if string(content) != string(hello) {
+		t.Error("Unexpected value")
+	}
+
+	content, err = tube.Read(int64(len(world)))
+	if err != nil {
+		panic(err)
+	}
+	if string(content) != string(world) {
+		t.Error("Unexpected value:", string(content))
 	}
 }

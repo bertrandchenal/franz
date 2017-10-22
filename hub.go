@@ -7,8 +7,14 @@ type Ticket struct {
 	sub_chan chan Message
 }
 
+const (
+	success   = iota
+	not_found = iota
+)
+
 type Message struct {
-	data []byte
+	data   []byte
+	status int
 	// tags []string // TODO
 }
 
@@ -63,7 +69,7 @@ func (self *Hub) Scheduler() {
 				if err != nil {
 					panic(err)
 				}
-				ticket.sub_chan <- Message{data}
+				ticket.sub_chan <- Message{data, success}
 			}
 			// Clear pool
 			self.ticket_pool = make([]*Ticket, 0, 5)
@@ -83,10 +89,10 @@ func (self *Hub) Scheduler() {
 				if err != nil {
 					panic(err)
 				}
-				ticket.sub_chan <- Message{data}
+				ticket.sub_chan <- Message{data, success}
 			} else {
 				// Requested offset is out of bound
-				ticket.sub_chan <- Message{}
+				ticket.sub_chan <- Message{data: nil, status: not_found}
 			}
 		}
 	}
