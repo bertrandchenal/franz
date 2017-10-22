@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,10 +25,11 @@ type Bucket struct {
 type BucketList []*Bucket
 
 type Tube struct {
-	Name    string
-	Root    string
-	Len     int64
-	buckets BucketList
+	Name         string
+	Root         string
+	Len          int64
+	buckets      BucketList
+	append_mutex *sync.Mutex
 }
 
 // Makes BucketList sortable
@@ -71,13 +73,14 @@ func NewTube(root string, name string) *Tube {
 	buckets := ScanBuckets(root)
 	tube_len := MaxOffset(buckets)
 	sort.Sort(buckets)
-	tube := &Tube{
-		Name:    name,
-		Root:    root,
-		Len:     tube_len,
-		buckets: buckets,
+
+	return &Tube{
+		Name:         name,
+		Root:         root,
+		Len:          tube_len,
+		buckets:      buckets,
+		append_mutex: &sync.Mutex{},
 	}
-	return tube
 }
 
 func (self *Tube) GetBucket(offset int64) *Bucket {
@@ -129,6 +132,11 @@ func (self *Tube) TailBucket(chunk_size int64) *Bucket {
 }
 
 func (self *Tube) Append(data []byte, extra_indexes ...string) error {
+	self.append_mutex.Lock()
+	defer func() {
+		self.append_mutex.Unlock()
+	}()
+
 	bucket := self.TailBucket(int64(len(data) * 8))
 	bucket_name := strconv.FormatInt(bucket.Offset, 16)
 	filename := path.Join(self.Root, bucket_name)
