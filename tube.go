@@ -169,7 +169,7 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 		return err
 	}
 	for _, idx := range extra_indexes {
-		err = self.UpdateIndex(filename+"-"+idx, offset_buff) // XXX idx_row ?
+		err = self.UpdateIndex(filename + "-" + idx, offset_buff) // XXX idx_row ?
 		if err != nil {
 			return err
 		}
