@@ -16,7 +16,10 @@ func cleanup() {
 	}
 	for _, file := range files {
 		filename := path.Join(TEST_DIR, file.Name())
-		os.Remove(filename)
+		err = os.Remove(filename)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
