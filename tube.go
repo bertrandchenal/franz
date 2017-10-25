@@ -265,7 +265,7 @@ func (self *Tube) Search(bucket *Bucket, offset int64) (int64, int64, error) {
 	if next_pos == nb_pos {
 		// we have reached the last position, this means the requested
 		// message span until the end of the bucket
-		chunk_size = self.Len - offset
+		chunk_size = bucket.Size - offset
 	} else {
 		_, err = idx_fh.ReadAt(buff, int64(next_pos)*8)
 		if err != nil {
