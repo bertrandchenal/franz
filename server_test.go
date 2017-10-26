@@ -12,13 +12,6 @@ import (
 
 const address string = "localhost:1234"
 
-func launch_server() {
-	http.Handle("/ws", websocket.Handler(Echo))
-	println("Server started")
-	if err := http.ListenAndServe(":1234", nil); err != nil {
-		log.Fatal("ListenAndServe:", err)
-	}
-}
 
 func launch_client() {
 	fmt.Println("Starting Client")
