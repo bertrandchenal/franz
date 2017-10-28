@@ -5,7 +5,7 @@ import (
 	"github.com/yawn/netstring"
 	"golang.org/x/net/websocket"
 	"log"
-	"net/http"
+	// "net/http"
 	"os"
 	"time"
 )

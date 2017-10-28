@@ -11,13 +11,18 @@ const (
 
 type Message struct {
 	data   []byte
-	status int
 	tags   []string
+}
+
+type Response struct {
+	data   []byte
+	status int
+	next_offset int64
 }
 
 type Ticket struct {
 	offset    int64
-	resp_chan chan *Message
+	resp_chan chan *Response
 	tags      []string
 }
 
@@ -45,7 +50,7 @@ func NewHub(tube *Tube) *Hub {
 }
 
 func NewTicket(offset int64, tags []string) *Ticket {
-	resp_chan := make(chan *Message, 1)
+	resp_chan := make(chan *Response, 1)
 	return &Ticket{offset, resp_chan, tags}
 }
 
@@ -57,7 +62,7 @@ func (self *Hub) Publish(data []byte, tags ...string) {
 	self.pub_chan <- &msg
 }
 
-func (self *Hub) Subscribe(offset int64, tags ...string) chan *Message {
+func (self *Hub) Subscribe(offset int64, tags ...string) chan *Response {
 	ticket := NewTicket(offset, tags)
 	self.sub_chan <- ticket
 	return ticket.resp_chan
@@ -84,7 +89,7 @@ func (self *Hub) Broadcast(ticket *Ticket) {
 			panic(err)
 		}
 		for _, ticket := range tickets {
-			ticket.resp_chan <- &Message{data: data, status: success}
+			ticket.resp_chan <- &Response{data: data, status: success}
 		}
 		// Clear pool
 		delete(self.ticket_pool, offset)
@@ -101,7 +106,7 @@ func (self *Hub) Scheduler() {
 		case ticket := <-self.sub_chan:
 			if ticket.offset > self.tube.Len {
 				// Requested offset is out of bound
-				ticket.resp_chan <- &Message{data: nil, status: not_found}
+				ticket.resp_chan <- &Response{data: nil, status: not_found}
 				break
 			}
 			// Negative offset means wait for next msg

@@ -134,7 +134,7 @@ func (self *Tube) TailBucket(chunk_size int64) *Bucket {
 	return tail_bucket
 }
 
-func (self *Tube) Append(data []byte, extra_indexes ...string) error {
+func (self *Tube) Append(data []byte, tags ...string) error {
 	self.append_mutex.Lock()
 	defer func() {
 		self.append_mutex.Unlock()
@@ -168,8 +168,8 @@ func (self *Tube) Append(data []byte, extra_indexes ...string) error {
 	if err != nil {
 		return err
 	}
-	for _, idx := range extra_indexes {
-		err = self.UpdateIndex(filename + "-" + idx, offset_buff) // XXX idx_row ?
+	for _, name := range tags {
+		err = self.UpdateIndex(filename + "-" + name, offset_buff) // XXX idx_row ?
 		if err != nil {
 			return err
 		}
@@ -201,7 +201,7 @@ func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
 	return nil
 }
 
-func (self *Tube) Read(offset int64) ([]byte, error) {
+func (self *Tube) Read(offset int64, tags ...string) ([]byte, error) {
 	// Find matching bucket
 	bucket := self.GetBucket(offset)
 	if bucket == nil {
@@ -230,18 +230,48 @@ func (self *Tube) Read(offset int64) ([]byte, error) {
 }
 
 
-func (self *Tube) Search(bucket *Bucket, offset int64) (int64, int64, error) {
+func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, int64, error) {
+	// Find the next starting block whose position is bigger or equal
+	// to offset
 	filename := path.Join(self.Root, bucket.Name)
+	// offset inside the bucket is relative to the offset of the
+	// bucket itself
+	relative_offset := offset - bucket.Offset
+
+
+	// Search for a common offset among given tags
+	for _, tag := range tags {
+		tag_idx_fh, err := mmap.Open(filename + "-" + tag + ".idx")
+		if err != nil {
+			return 0, 0, err
+		}
+		defer tag_idx_fh.Close()
+
+		// Each index item take 32bits (4 bytes)
+		nb_pos := tag_idx_fh.Len() / 4
+		buff := make([]byte, 4)
+		pos := sort.Search(nb_pos, func(i int) bool {
+			tag_idx_fh.ReadAt(buff, int64(i) * 4)
+			value := binary.LittleEndian.Uint32(buff)
+			return int64(value) >= relative_offset
+		})
+
+		// Forward offset to first matching position for tag
+		tag_idx_fh.ReadAt(buff, int64(pos) * 4)
+		relative_offset = int64(binary.LittleEndian.Uint32(buff))
+	}
+
+
+
+	// Search in the main index to discover block boundary
 	idx_fh, err := mmap.Open(filename + ".idx")
 	if err != nil {
 		return 0, 0, err
 	}
 	defer idx_fh.Close()
 
-	// offset inside the bucket is relative to the offset of the
-	// bucket itself
-	relative_offset := offset - bucket.Offset
-	// Each index item take 64bits (8 bytes)
+	// Each index item take 64bits (8 bytes), the first 4 bytes
+	// contains the offset (the last 4 are timestamps)
 	nb_pos := idx_fh.Len() / 8
 	buff := make([]byte, 4)
 	pos := sort.Search(nb_pos, func(i int) bool {
@@ -250,14 +280,14 @@ func (self *Tube) Search(bucket *Bucket, offset int64) (int64, int64, error) {
 		return int64(value) >= relative_offset
 	})
 
-	// pos contains the position in the index file of the requested
-	// offset
-	idx_fh.ReadAt(buff, int64(pos)*8)
-	value := binary.LittleEndian.Uint32(buff)
-	if int64(value) != relative_offset {
-		err = fmt.Errorf("Offset %q does not exists in %q", offset, self.Name)
-		return 0, 0, err
-	}
+	// // pos contains the position in the index file of the requested
+	// // offset
+	// idx_fh.ReadAt(buff, int64(pos)*8)
+	// value := binary.LittleEndian.Uint32(buff)
+	// if int64(value) != relative_offset {
+	// 	err = fmt.Errorf("Offset %q does not exists in %q", offset, self.Name)
+	// 	return 0, 0, err
+	// }
 
 	// pos + 1 tells where the chunk stop
 	next_pos := pos + 1
@@ -271,7 +301,7 @@ func (self *Tube) Search(bucket *Bucket, offset int64) (int64, int64, error) {
 		if err != nil {
 			return 0, 0, err
 		}
-		value = binary.LittleEndian.Uint32(buff)
+		value := binary.LittleEndian.Uint32(buff)
 		chunk_size = int64(value) - relative_offset
 	}
 

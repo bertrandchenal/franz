@@ -27,24 +27,24 @@ func TestHub(t *testing.T) {
 		hub.Publish(hello, tag)
 	}
 
-	value := <-early_chan
-	if string(value.data) != string(hello) {
-		t.Error("Unexpected value:", string(value.data))
+	msg := <-early_chan
+	if string(msg.data) != string(hello) {
+		t.Error("Unexpected value:", string(msg.data))
 	}
 
 	// test without tags
 	offset := int64(0)
 	for i := 0; i < 5; i++ {
 		resp_chan := hub.Subscribe(offset)
-		value := <-resp_chan
-		if value.status == not_found {
+		msg := <-resp_chan
+		if msg.status == not_found {
 			panic("NOT FOUND")
 			continue
 		}
-		if string(value.data) != string(hello) {
-			t.Error("Unexpected value:", value.data)
+		if string(msg.data) != string(hello) {
+			t.Error("Unexpected value:", msg.data)
 		}
-		offset += int64(len(value.data))
+		offset += int64(len(msg.data))
 	}
 
 	// test with tags
