@@ -20,7 +20,7 @@ const MaxBucketSize = int64(4294967294) // 2^32-1
 type Bucket struct {
 	Offset int64 // start offset (in tube) of the bucket
 	Size   int64 // offset + size is end offset wrt the tube
-	Name string
+	Name   string
 }
 
 type BucketList []*Bucket
@@ -127,7 +127,7 @@ func (self *Tube) TailBucket(chunk_size int64) *Bucket {
 	// size
 	tail_bucket := self.buckets[len(self.buckets)-1]
 	if tail_bucket.Size+chunk_size > MaxBucketSize {
-		new_bucket := NewBucket(tail_bucket.Offset + tail_bucket.Size, 0)
+		new_bucket := NewBucket(tail_bucket.Offset+tail_bucket.Size, 0)
 		self.buckets = append(self.buckets, new_bucket)
 		return new_bucket
 	}
@@ -144,19 +144,12 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 	filename := path.Join(self.Root, bucket.Name)
 	// Open bucket file
 	fh, err := os.OpenFile(filename+".franz", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
-	if err != nil {
-		return err
-	}
+	check(err)
 	defer fh.Close()
 
 	// Append data to file
 	_, err = fh.Write(data)
-	if err != nil {
-		return err
-	}
-	if err != nil {
-		return err
-	}
+	check(err)
 
 	// Append file size and timestamp to indexes
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
@@ -165,14 +158,10 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 	binary.LittleEndian.PutUint32(timestamp_buff, uint32(time.Now().Unix()))
 	idx_row := append(offset_buff, timestamp_buff...)
 	err = self.UpdateIndex(filename, idx_row)
-	if err != nil {
-		return err
-	}
+	check(err)
 	for _, name := range tags {
-		err = self.UpdateIndex(filename + "-" + name, offset_buff) // XXX idx_row ?
-		if err != nil {
-			return err
-		}
+		err = self.UpdateIndex(filename+"-"+name, offset_buff) // XXX idx_row ?
+		check(err)
 	}
 
 	// Keep track of bucket size
@@ -184,20 +173,12 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
 	// Open index file
 	fh, err := os.OpenFile(index_name+".idx", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
-	if err != nil {
-		return err
-	}
+	check(err)
 	defer fh.Close()
 
 	// Append offset
 	_, err = fh.Write(offset)
-	if err != nil {
-		return err
-	}
-
-	if err != nil {
-		return err
-	}
+	check(err)
 	return nil
 }
 
@@ -208,27 +189,20 @@ func (self *Tube) Read(offset int64, tags ...string) ([]byte, error) {
 		err := fmt.Errorf("Not bucket for offset %d in %q", offset, self.Name)
 		return nil, err
 	}
-	relative_offset, chunk_size, err := self.Search(bucket, offset)
-	if err != nil {
-		return nil, err
-	}
+	relative_offset, chunk_size, err := self.Search(bucket, offset, tags...)
+	check(err)
 
 	// Read actual content
 	filename := path.Join(self.Root, bucket.Name)
 	bucket_fh, err := mmap.Open(filename + ".franz")
-	if err != nil {
-		return nil, err
-	}
+	check(err)
 	defer bucket_fh.Close()
 
 	chunk_content := make([]byte, chunk_size)
 	_, err = bucket_fh.ReadAt(chunk_content, relative_offset)
-	if err != nil {
-		return nil, err
-	}
+	check(err)
 	return chunk_content, nil
 }
-
 
 func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, int64, error) {
 	// Find the next starting block whose position is bigger or equal
@@ -238,36 +212,29 @@ func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, i
 	// bucket itself
 	relative_offset := offset - bucket.Offset
 
-
 	// Search for a common offset among given tags
 	for _, tag := range tags {
 		tag_idx_fh, err := mmap.Open(filename + "-" + tag + ".idx")
-		if err != nil {
-			return 0, 0, err
-		}
+		check(err)
 		defer tag_idx_fh.Close()
 
 		// Each index item take 32bits (4 bytes)
 		nb_pos := tag_idx_fh.Len() / 4
 		buff := make([]byte, 4)
 		pos := sort.Search(nb_pos, func(i int) bool {
-			tag_idx_fh.ReadAt(buff, int64(i) * 4)
+			tag_idx_fh.ReadAt(buff, int64(i)*4)
 			value := binary.LittleEndian.Uint32(buff)
 			return int64(value) >= relative_offset
 		})
 
 		// Forward offset to first matching position for tag
-		tag_idx_fh.ReadAt(buff, int64(pos) * 4)
+		tag_idx_fh.ReadAt(buff, int64(pos)*4)
 		relative_offset = int64(binary.LittleEndian.Uint32(buff))
 	}
 
-
-
 	// Search in the main index to discover block boundary
 	idx_fh, err := mmap.Open(filename + ".idx")
-	if err != nil {
-		return 0, 0, err
-	}
+	check(err)
 	defer idx_fh.Close()
 
 	// Each index item take 64bits (8 bytes), the first 4 bytes
@@ -275,19 +242,13 @@ func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, i
 	nb_pos := idx_fh.Len() / 8
 	buff := make([]byte, 4)
 	pos := sort.Search(nb_pos, func(i int) bool {
-		idx_fh.ReadAt(buff, int64(i)*8)
+		_, err = idx_fh.ReadAt(buff, int64(i)*8)
+		if err != nil {
+			panic(err)
+		}
 		value := binary.LittleEndian.Uint32(buff)
 		return int64(value) >= relative_offset
 	})
-
-	// // pos contains the position in the index file of the requested
-	// // offset
-	// idx_fh.ReadAt(buff, int64(pos)*8)
-	// value := binary.LittleEndian.Uint32(buff)
-	// if int64(value) != relative_offset {
-	// 	err = fmt.Errorf("Offset %q does not exists in %q", offset, self.Name)
-	// 	return 0, 0, err
-	// }
 
 	// pos + 1 tells where the chunk stop
 	next_pos := pos + 1
@@ -295,12 +256,10 @@ func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, i
 	if next_pos == nb_pos {
 		// we have reached the last position, this means the requested
 		// message span until the end of the bucket
-		chunk_size = bucket.Size - offset
+		chunk_size = bucket.Size - relative_offset
 	} else {
 		_, err = idx_fh.ReadAt(buff, int64(next_pos)*8)
-		if err != nil {
-			return 0, 0, err
-		}
+		check(err)
 		value := binary.LittleEndian.Uint32(buff)
 		chunk_size = int64(value) - relative_offset
 	}

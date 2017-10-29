@@ -74,11 +74,21 @@ func TestAppend(t *testing.T) {
 		t.Error("Unexpected value")
 	}
 
-	content, err = tube.Read(int64(len(world)))
+	content, err = tube.Read(int64(len(hello)))
 	if err != nil {
 		panic(err)
 	}
 	if string(content) != string(world) {
 		t.Error("Unexpected value:", string(content))
 	}
+
+	// Read by tag
+	content, err = tube.Read(0, "ham", "spam")
+	if err != nil {
+		panic(err)
+	}
+	if string(content) != string(world) {
+		t.Error("Unexpected value:", string(content))
+	}
+
 }

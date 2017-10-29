@@ -12,7 +12,6 @@ import (
 
 const address string = "localhost:1234"
 
-
 func launch_client() {
 	fmt.Println("Starting Client")
 	ws, err := websocket.Dial(fmt.Sprintf("ws://%s/ws", address), "", fmt.Sprintf("http://%s/", address))

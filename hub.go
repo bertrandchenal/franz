@@ -10,13 +10,13 @@ const (
 )
 
 type Message struct {
-	data   []byte
-	tags   []string
+	data []byte
+	tags []string
 }
 
 type Response struct {
-	data   []byte
-	status int
+	data        []byte
+	status      int
 	next_offset int64
 }
 
