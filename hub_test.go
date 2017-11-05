@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestHub(t *testing.T) {
+func TestSubscribeFirst(t *testing.T) {
 	cleanup()
 	tube := NewTube(".", TEST_DIR)
 	hub := NewHub(tube)
@@ -46,25 +46,41 @@ func TestHub(t *testing.T) {
 		}
 		offset += int64(len(msg.data))
 	}
+}
 
-	// test with tags
-	// for i := 0; i < 5; i++ {
-	// 	var tag string
-	// 	if i % 2 == 0 {
-	// 		tag = "even"
-	// 	} else {
-	// 		tag = "odd"
-	// 	}
-	// 	resp_chan := hub.Subscribe(offset, tag)
-	// 	value := <-resp_chan
-	// 	if value.status == not_found {
-	// 		panic("NOT FOUND")
-	// 		continue
-	// 	}
-	// 	if string(value.data) != string(hello) {
-	// 		t.Error("Unexpected value:", value.data)
-	// 	}
-	// 	offset += int64(len(value.data))
-	// }
 
+func TestPublishFirst(t *testing.T) {
+	cleanup()
+	tube := NewTube(".", TEST_DIR)
+	hub := NewHub(tube)
+
+	hello := []byte("hello")
+	for i := 0; i < 5; i++ {
+		var tag string
+		if i%2 == 0 {
+			tag = "even"
+		} else {
+			tag = "odd"
+		}
+		go func() {
+			time.Sleep(time.Duration(i) * time.Nanosecond)
+			hub.Publish(hello, tag)
+		}()
+		hub.Publish(hello, tag)
+	}
+
+	// test without tags
+	offset := int64(0)
+	for i := 0; i < 5; i++ {
+		resp_chan := hub.Subscribe(offset)
+		msg := <-resp_chan
+		if msg.status == not_found {
+			panic("NOT FOUND")
+			continue
+		}
+		if string(msg.data) != string(hello) {
+			t.Error("Unexpected value:", msg.data)
+		}
+		offset += int64(len(msg.data))
+	}
 }
