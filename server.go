@@ -1,24 +1,22 @@
 package franz
 
 import (
-        "github.com/yawn/netstring"
-        "golang.org/x/net/websocket"
-        "log"
-        "net/http"
+	"github.com/yawn/netstring"
+	"golang.org/x/net/websocket"
+	"log"
+	"net/http"
 )
 
 type Server struct {
 	root_path string
-	address string
-	hubs map[string]*Hub
+	address   string
+	hubs      map[string]*Hub
 }
 
-
-func NewServer(root_path *string, address *string) *Server{
+func NewServer(root_path *string, address *string) *Server {
 	hubs := make(map[string]*Hub)
 	return &Server{*root_path, *address, hubs}
 }
-
 
 func (self *Server) Run() {
 	http.Handle("/ws", websocket.Handler(self.WSHandler))
@@ -28,7 +26,7 @@ func (self *Server) Run() {
 	}
 }
 
-func (self *Server) GetHub(name string) (*Hub){
+func (self *Server) GetHub(name string) *Hub {
 	hub, found := self.hubs[name]
 	if !found {
 		tube := NewTube(self.root_path, name)
@@ -58,8 +56,11 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			name := string(items[1])
 			data := items[2]
 			hub := self.GetHub(name)
-			// tags := items[3] TODO
-			hub.Publish(data)
+			tags := make([]string, len(items) - 3)
+			for item := range items[3:] {
+				tags = append(tags, string(item))
+			}
+			hub.Publish(data, tags...)
 			if err := websocket.Message.Send(ws, []byte("OK")); err != nil {
 				log.Println("[SEND]", err)
 				break
@@ -78,17 +79,15 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 					}
 					break
 				}
-				
+
 				if err := websocket.Message.Send(ws, msg.data); err != nil {
 					log.Println("[MSG SEND]", err)
 					break
 				}
 				offset += int64(len(msg.data))
 			}
-			
+
 		}
 
 	}
 }
-
-
