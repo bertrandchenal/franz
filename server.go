@@ -57,8 +57,11 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			name := string(items[1])
 			data := items[2]
 			hub := self.GetHub(name)
-			// tags := items[3] TODO
-			hub.Publish(data)
+			tags := make([]string, len(items) - 3)
+			for item := range items[3:] {
+				tags = append(tags, string(item))
+			}
+			hub.Publish(data, tags...)
 			if err := websocket.Message.Send(ws, []byte("OK")); err != nil {
 				log.Println("[SEND]", err)
 				break

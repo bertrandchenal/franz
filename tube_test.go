@@ -10,22 +10,12 @@ import (
 const TEST_DIR = "test-dir"
 
 func cleanup() {
-	files, err := ioutil.ReadDir(TEST_DIR)
-	if err != nil {
-		panic(err)
-	}
-	for _, file := range files {
-		filename := path.Join(TEST_DIR, file.Name())
-		err = os.Remove(filename)
-		if err != nil {
-			panic(err)
-		}
-	}
+	os.RemoveAll(TEST_DIR)
 }
 
 func TestInit(t *testing.T) {
 	cleanup()
-	tube := NewTube(".", TEST_DIR)
+	tube := NewTube(TEST_DIR, "tube-test")
 	if len(tube.buckets) > 0 {
 		t.Error("data dir not clean")
 	}
@@ -33,14 +23,14 @@ func TestInit(t *testing.T) {
 
 func TestAppend(t *testing.T) {
 	cleanup()
-	tube := NewTube(".", TEST_DIR)
+	tube := NewTube(TEST_DIR, "tube-test")
 	hello := []byte("hello")
 	// Append with no tags
 	err := tube.Append(hello)
 	if err != nil {
 		t.Error(err)
 	}
-	files, err := ioutil.ReadDir(TEST_DIR)
+	files, err := ioutil.ReadDir(path.Join(TEST_DIR, "tube-test"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -57,7 +47,7 @@ func TestAppend(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	files, err = ioutil.ReadDir(TEST_DIR)
+	files, err = ioutil.ReadDir(path.Join(TEST_DIR, "tube-test"))
 	if err != nil {
 		t.Error(err)
 	}

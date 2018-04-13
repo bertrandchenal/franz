@@ -160,7 +160,7 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 	err = self.UpdateIndex(filename, idx_row)
 	check(err)
 	for _, name := range tags {
-		err = self.UpdateIndex(filename+"-"+name, offset_buff) // XXX idx_row ?
+		err = self.UpdateIndex(filename + "-" + name, offset_buff) // XXX idx_row ?
 		check(err)
 	}
 

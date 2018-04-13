@@ -7,7 +7,7 @@ import (
 
 func TestSubscribeFirst(t *testing.T) {
 	cleanup()
-	tube := NewTube(".", TEST_DIR)
+	tube := NewTube(TEST_DIR, "hub-test")
 	hub := NewHub(tube)
 
 	early_chan := hub.Subscribe(0)
@@ -48,10 +48,9 @@ func TestSubscribeFirst(t *testing.T) {
 	}
 }
 
-
 func TestPublishFirst(t *testing.T) {
 	cleanup()
-	tube := NewTube(".", TEST_DIR)
+	tube := NewTube(TEST_DIR, "hub-test")
 	hub := NewHub(tube)
 
 	hello := []byte("hello")
