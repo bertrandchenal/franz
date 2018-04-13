@@ -253,7 +253,7 @@ func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, i
 	// pos + 1 tells where the chunk stop
 	next_pos := pos + 1
 	var chunk_size int64
-	if next_pos == nb_pos {
+	if next_pos >= nb_pos {
 		// we have reached the last position, this means the requested
 		// message span until the end of the bucket
 		chunk_size = bucket.Size - relative_offset

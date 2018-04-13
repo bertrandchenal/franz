@@ -7,7 +7,7 @@ import (
 
 
 func main() {
-	var address = flag.String("address", ":8080", "Address to listen to")
+	var address = flag.String("address", ":9090", "Address to listen to")
 	var root_path = flag.String("root", ".", "Root data directory")
 
 	server := franz.NewServer(root_path, address)
