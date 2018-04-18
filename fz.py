@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from time import time
 import argparse
 import sys
@@ -65,7 +66,7 @@ def main(cli):
         pub(ws, *args)
     elif action == 'sub':
         for chunk in sub(ws, *args, follow=cli['follow']):
-            print(chunk)
+            print(chunk.decode('utf-8'))
     elif action == 'bench':
         bench(ws)
     else:
