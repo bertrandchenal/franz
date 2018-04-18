@@ -18,9 +18,10 @@ import (
 const MaxBucketSize = int64(4294967294) // 2^32-1
 
 type Bucket struct {
-	Offset int64 // start offset (in tube) of the bucket
-	Size   int64 // offset + size is end offset wrt the tube
-	Name   string
+	Offset    int64 // start offset (in tube) of the bucket
+	Size      int64 // offset + size is end offset wrt the tube
+	Timestamp int64
+	Name      string
 }
 
 type BucketList []*Bucket
@@ -59,19 +60,33 @@ func ScanBuckets(root string) BucketList {
 		if len(splitted) != 2 {
 			continue
 		}
-		if splitted[1] == "franz" {
-			if bucket_offset, err = strconv.ParseInt(splitted[0], 16, 64); err != nil {
-				log.Fatal(err)
-			}
-			buckets = append(buckets, NewBucket(bucket_offset, file.Size()))
+		if splitted[1] != "franz" {
+			continue
 		}
+		if bucket_offset, err = strconv.ParseInt(splitted[0], 16, 64); err != nil {
+			log.Fatal(err)
+		}
+
+		// We read the first timestamp of the index
+		idx_file := path.Join(root, splitted[0]) + ".idx"
+		idx_fh, err := mmap.Open(idx_file)
+		check(err)
+		defer idx_fh.Close()
+		buff := make([]byte, 4)
+		_, err = idx_fh.ReadAt(buff, 4)
+		timestamp := int64(binary.LittleEndian.Uint32(buff))
+
+		// Instanciate bucket object and append it
+		new_bucket := NewBucket(bucket_offset, file.Size(), timestamp)
+		buckets = append(buckets, new_bucket)
+
 	}
 	return buckets
 }
 
-func NewBucket(offset int64, size int64) *Bucket {
+func NewBucket(offset int64, size int64, timestamp int64) *Bucket {
 	name := strconv.FormatInt(offset, 16)
-	return &Bucket{offset, size, name}
+	return &Bucket{offset, size, timestamp, name}
 }
 
 func NewTube(root string, name string) *Tube {
@@ -111,14 +126,17 @@ func MaxOffset(buckets []*Bucket) int64 {
 	return tail_bucket.Offset + tail_bucket.Size
 }
 
-func (self *Tube) TailBucket(chunk_size int64) *Bucket {
+func (self *Tube) TailBucket(chunk_size int64, now int64) *Bucket {
+	// Returns the latest bucket of the tube (if is there is still
+	// place enough for the chunk size) or create a new one.
+
 	if chunk_size > MaxBucketSize {
 		panic("Chunk size bigger that MaxBucketSize")
 	}
 
 	// No bucket yet, create it
 	if len(self.buckets) == 0 {
-		new_bucket := NewBucket(0, 0)
+		new_bucket := NewBucket(0, 0, now)
 		self.buckets = append(self.buckets, new_bucket)
 		return new_bucket
 	}
@@ -127,7 +145,7 @@ func (self *Tube) TailBucket(chunk_size int64) *Bucket {
 	// size
 	tail_bucket := self.buckets[len(self.buckets)-1]
 	if tail_bucket.Size+chunk_size > MaxBucketSize {
-		new_bucket := NewBucket(tail_bucket.Offset+tail_bucket.Size, 0)
+		new_bucket := NewBucket(tail_bucket.Offset+tail_bucket.Size, 0, now)
 		self.buckets = append(self.buckets, new_bucket)
 		return new_bucket
 	}
@@ -135,12 +153,15 @@ func (self *Tube) TailBucket(chunk_size int64) *Bucket {
 }
 
 func (self *Tube) Append(data []byte, tags ...string) error {
+	// Append data to tube and add data offset to the given tag indexes
+
 	self.append_mutex.Lock()
 	defer func() {
 		self.append_mutex.Unlock()
 	}()
 
-	bucket := self.TailBucket(int64(len(data) * 8))
+	now := time.Now().Unix()
+	bucket := self.TailBucket(int64(len(data)*8), now)
 	filename := path.Join(self.Root, bucket.Name)
 	// Open bucket file
 	fh, err := os.OpenFile(filename+".franz", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0650)
@@ -155,12 +176,12 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
 	timestamp_buff := make([]byte, 4)
 	binary.LittleEndian.PutUint32(offset_buff, uint32(self.Len))
-	binary.LittleEndian.PutUint32(timestamp_buff, uint32(time.Now().Unix()))
+	binary.LittleEndian.PutUint32(timestamp_buff, uint32(now))
 	idx_row := append(offset_buff, timestamp_buff...)
 	err = self.UpdateIndex(filename, idx_row)
 	check(err)
 	for _, name := range tags {
-		err = self.UpdateIndex(filename + "-" + name, offset_buff) // XXX idx_row ?
+		err = self.UpdateIndex(filename+"-"+name, offset_buff) // XXX idx_row ?
 		check(err)
 	}
 
@@ -207,6 +228,7 @@ func (self *Tube) Read(offset int64, tags ...string) ([]byte, error) {
 func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, int64, error) {
 	// Find the next starting block whose position is bigger or equal
 	// to offset
+
 	filename := path.Join(self.Root, bucket.Name)
 	// offset inside the bucket is relative to the offset of the
 	// bucket itself

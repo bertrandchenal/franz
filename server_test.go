@@ -34,11 +34,11 @@ func TestServer(t *testing.T) {
 	readMessage(ws)
 }
 
-func sendMessage(ws *websocket.Conn) (string) {
+func sendMessage(ws *websocket.Conn) string {
 	msg, err := netstring.Encode(
-		[]byte("publish"), //Action
+		[]byte("publish"),     //Action
 		[]byte("server-test"), //Tube
-		[]byte("bar"), // Message
+		[]byte("bar"),         // Message
 	)
 	if err != nil {
 		log.Fatal(err)

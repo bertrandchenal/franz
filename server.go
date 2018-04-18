@@ -57,7 +57,7 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			name := string(items[1])
 			data := items[2]
 			hub := self.GetHub(name)
-			tags := make([]string, len(items) - 3)
+			tags := make([]string, len(items)-3)
 			for item := range items[3:] {
 				tags = append(tags, string(item))
 			}

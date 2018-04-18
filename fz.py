@@ -25,6 +25,7 @@ def send_sub(ws, tube, offset):
         msg += '%s:%s,' % (len(offset), offset)
     ws.send(msg)
 
+
 def sub(ws, tube, offset=0, follow=False):
     send_sub(ws, tube, offset)
     if not follow:
@@ -36,6 +37,7 @@ def sub(ws, tube, offset=0, follow=False):
         except WebSocketTimeoutException:
             break
         yield data
+
 
 def bench(ws):
     payload = 'bench' * 1000
@@ -54,6 +56,7 @@ def bench(ws):
             break
 
     print('SUB', time() - start)
+
 
 def main(cli):
     ws = websocket.create_connection("ws://localhost:9090/ws")
