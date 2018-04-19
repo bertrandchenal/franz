@@ -77,7 +77,7 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 				offset = int64(i)
 			}
 			for {
-				resp_chan := hub.Subscribe(offset)
+				resp_chan := hub.Subscribe(offset, 0)  // TODO pass ts
 				msg := <-resp_chan
 				if msg.status == not_found {
 					if err := websocket.Message.Send(ws, []byte("KO")); err != nil {

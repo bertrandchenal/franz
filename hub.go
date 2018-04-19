@@ -22,6 +22,7 @@ type Response struct {
 
 type Ticket struct {
 	offset    int64
+	timestamp    int64
 	resp_chan chan *Response
 	tags      []string
 }
@@ -49,9 +50,9 @@ func NewHub(tube *Tube) *Hub {
 	return hub
 }
 
-func NewTicket(offset int64, tags []string) *Ticket {
+func NewTicket(offset int64, timestamp int64, tags []string) *Ticket {
 	resp_chan := make(chan *Response, 1)
-	return &Ticket{offset, resp_chan, tags}
+	return &Ticket{offset, timestamp, resp_chan, tags}
 }
 
 func (self *Hub) Publish(data []byte, tags ...string) {
@@ -62,8 +63,8 @@ func (self *Hub) Publish(data []byte, tags ...string) {
 	self.pub_chan <- &msg
 }
 
-func (self *Hub) Subscribe(offset int64, tags ...string) chan *Response {
-	ticket := NewTicket(offset, tags)
+func (self *Hub) Subscribe(offset int64, timestamp int64, tags ...string) chan *Response {
+	ticket := NewTicket(offset, timestamp, tags)
 	self.sub_chan <- ticket
 	return ticket.resp_chan
 }
@@ -86,7 +87,7 @@ func (self *Hub) Broadcast(new_ticket *Ticket) {
 			continue
 		}
 		// Answer to subscribers
-		data, err := self.tube.Read(ticket.offset)
+		data, err := self.tube.Read(ticket.offset, ticket.timestamp)
 		if err != nil {
 			panic(err)
 		}

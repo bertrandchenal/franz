@@ -55,7 +55,6 @@ def bench(ws):
         cnt += 1
         if cnt == 100:
             break
-
     print('SUB', time() - start)
 
 
