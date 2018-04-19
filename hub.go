@@ -29,16 +29,16 @@ type Ticket struct {
 type Hub struct {
 	pub_chan    chan *Message       // Incoming publication
 	sub_chan    chan *Ticket        // Ticket waiting for the next publication
-	ticket_pool map[int64][]*Ticket // Pool of ticket (subscription not yet answered)
+	ticket_pool []*Ticket // Pool of ticket (subscription not yet answered)
 	mutex       *sync.Mutex
 	tube        *Tube
 }
 
 func NewHub(tube *Tube) *Hub {
 	hub := &Hub{
-		pub_chan:    make(chan *Message, 1), // REMOVEME (the 10)
+		pub_chan:    make(chan *Message, 1),
 		sub_chan:    make(chan *Ticket, 1),
-		ticket_pool: make(map[int64][]*Ticket),
+		ticket_pool: make([]*Ticket, 0, 1),
 		mutex:       &sync.Mutex{},
 		tube:        tube,
 	}
@@ -68,31 +68,31 @@ func (self *Hub) Subscribe(offset int64, tags ...string) chan *Response {
 	return ticket.resp_chan
 }
 
-func (self *Hub) Broadcast(ticket *Ticket) {
+func (self *Hub) Broadcast(new_ticket *Ticket) {
 	self.mutex.Lock()
 	defer self.mutex.Unlock()
 
 	// Add ticket to pool
-	if ticket != nil {
-		self.ticket_pool[ticket.offset] = append(self.ticket_pool[ticket.offset], ticket)
+	if new_ticket != nil {
+		self.ticket_pool = append(self.ticket_pool, new_ticket)
 	}
 
 	// Loop on all ticket and try to answer them
-	for offset, tickets := range self.ticket_pool {
+	new_pool := make([]*Ticket, 0, 5)
+	for _, ticket := range self.ticket_pool {
 		// Early return if offset is too large
-		if offset >= self.tube.Len {
+		if ticket.offset >= self.tube.Len {
+			new_pool = append(new_pool, ticket)
 			continue
 		}
 		// Answer to subscribers
-		data, err := self.tube.Read(offset)
+		data, err := self.tube.Read(ticket.offset)
 		if err != nil {
 			panic(err)
 		}
-		for _, ticket := range tickets {
-			ticket.resp_chan <- &Response{data: data, status: success}
-		}
+		ticket.resp_chan <- &Response{data: data, status: success}
 		// Clear pool
-		delete(self.ticket_pool, offset)
+		self.ticket_pool = new_pool
 	}
 }
 
@@ -118,3 +118,4 @@ func (self *Hub) Scheduler() {
 		}
 	}
 }
+
