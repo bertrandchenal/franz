@@ -104,11 +104,11 @@ func NewTube(root string, name string) *Tube {
 	}
 }
 
-func (self *Tube) GetBucket(offset int64) *Bucket {
+func (self *Tube) GetBucket(offset int64, timestamp int64) *Bucket {
 	var bucket *Bucket
 	pos := sort.Search(len(self.buckets), func(i int) bool {
 		b := self.buckets[i]
-		return b.Offset+b.Size >= offset
+		return b.Offset+b.Size >= offset && b.Timestamp >= timestamp
 	})
 
 	if pos >= len(self.buckets) {
@@ -203,14 +203,14 @@ func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
 	return nil
 }
 
-func (self *Tube) Read(offset int64, tags ...string) ([]byte, error) {
-	// Find matching bucket
-	bucket := self.GetBucket(offset)
+func (self *Tube) Read(offset int64, timestamp int64, tags ...string) ([]byte, error) {
+	// Find matching bucket (TODO should take tags into account)
+	bucket := self.GetBucket(offset, timestamp)
 	if bucket == nil {
 		err := fmt.Errorf("Not bucket for offset %d in %q", offset, self.Name)
 		return nil, err
 	}
-	relative_offset, chunk_size, err := self.Search(bucket, offset, tags...)
+	relative_offset, chunk_size, err := self.Search(bucket, offset, timestamp, tags...)
 	check(err)
 
 	// Read actual content
@@ -225,22 +225,22 @@ func (self *Tube) Read(offset int64, tags ...string) ([]byte, error) {
 	return chunk_content, nil
 }
 
-func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, int64, error) {
+func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...string) (int64, int64, error) {
 	// Find the next starting block whose position is bigger or equal
-	// to offset
+	// to offset and timestamp
 
 	filename := path.Join(self.Root, bucket.Name)
 	// offset inside the bucket is relative to the offset of the
 	// bucket itself
 	relative_offset := offset - bucket.Offset
 
-	// Search for a common offset among given tags
+	// Search for a common offset among given tags (XXX timestamp?)
 	for _, tag := range tags {
 		tag_idx_fh, err := mmap.Open(filename + "-" + tag + ".idx")
 		check(err)
 		defer tag_idx_fh.Close()
 
-		// Each index item take 32bits (4 bytes)
+		// Each index item take 2x32bits (4 bytes)
 		nb_pos := tag_idx_fh.Len() / 4
 		buff := make([]byte, 4)
 		pos := sort.Search(nb_pos, func(i int) bool {
@@ -259,17 +259,20 @@ func (self *Tube) Search(bucket *Bucket, offset int64, tags ...string) (int64, i
 	check(err)
 	defer idx_fh.Close()
 
-	// Each index item take 64bits (8 bytes), the first 4 bytes
-	// contains the offset (the last 4 are timestamps)
+	// Each index item take 64bits (8 bytes), 4 bytes for the offset,
+	// 4 for timestamp
 	nb_pos := idx_fh.Len() / 8
 	buff := make([]byte, 4)
 	pos := sort.Search(nb_pos, func(i int) bool {
 		_, err = idx_fh.ReadAt(buff, int64(i)*8)
-		if err != nil {
-			panic(err)
-		}
-		value := binary.LittleEndian.Uint32(buff)
-		return int64(value) >= relative_offset
+		check(err)
+		idx_os := binary.LittleEndian.Uint32(buff)
+
+		_, err = idx_fh.ReadAt(buff, int64(i)*8 + 4)
+		check(err)
+		idx_ts := binary.LittleEndian.Uint32(buff)
+
+		return int64(idx_os) >= relative_offset && int64(idx_ts) >= timestamp
 	})
 
 	// pos + 1 tells where the chunk stop
