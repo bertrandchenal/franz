@@ -22,15 +22,15 @@ type Response struct {
 
 type Ticket struct {
 	offset    int64
-	timestamp    int64
+	timestamp int64
 	resp_chan chan *Response
 	tags      []string
 }
 
 type Hub struct {
-	pub_chan    chan *Message       // Incoming publication
-	sub_chan    chan *Ticket        // Ticket waiting for the next publication
-	ticket_pool []*Ticket // Pool of ticket (subscription not yet answered)
+	pub_chan    chan *Message // Incoming publication
+	sub_chan    chan *Ticket  // Ticket waiting for the next publication
+	ticket_pool []*Ticket     // Pool of ticket (subscription not yet answered)
 	mutex       *sync.Mutex
 	tube        *Tube
 }
@@ -87,11 +87,14 @@ func (self *Hub) Broadcast(new_ticket *Ticket) {
 			continue
 		}
 		// Answer to subscribers
-		data, err := self.tube.Read(ticket.offset, ticket.timestamp)
+		next_offset, data, err := self.tube.Read(ticket.offset, ticket.timestamp, ticket.tags...)
 		if err != nil {
 			panic(err)
+		} else if data == nil {
+			ticket.resp_chan <- &Response{data: nil, next_offset: next_offset, status: not_found}
+		} else {
+			ticket.resp_chan <- &Response{data: data, next_offset: next_offset, status: success}
 		}
-		ticket.resp_chan <- &Response{data: data, status: success}
 		// Clear pool
 		self.ticket_pool = new_pool
 	}
@@ -101,7 +104,7 @@ func (self *Hub) Scheduler() {
 	for {
 		select {
 		case msg := <-self.pub_chan:
-			self.tube.Append(msg.data)
+			self.tube.Append(msg.data, msg.tags...)
 			self.Broadcast(nil)
 
 		case ticket := <-self.sub_chan:
@@ -119,4 +122,3 @@ func (self *Hub) Scheduler() {
 		}
 	}
 }
-

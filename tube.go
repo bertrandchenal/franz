@@ -180,6 +180,7 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 	idx_row := append(offset_buff, timestamp_buff...)
 	err = self.UpdateIndex(filename, idx_row)
 	check(err)
+
 	for _, name := range tags {
 		err = self.UpdateIndex(filename+"-"+name, offset_buff) // XXX idx_row ?
 		check(err)
@@ -203,16 +204,18 @@ func (self *Tube) UpdateIndex(index_name string, offset []byte) error {
 	return nil
 }
 
-func (self *Tube) Read(offset int64, timestamp int64, tags ...string) ([]byte, error) {
+func (self *Tube) Read(offset int64, timestamp int64, tags ...string) (int64, []byte, error) {
 	// Find matching bucket (TODO should take tags into account)
 	bucket := self.GetBucket(offset, timestamp)
 	if bucket == nil {
-		err := fmt.Errorf("Not bucket for offset %d in %q", offset, self.Name)
-		return nil, err
+		err := fmt.Errorf("No bucket for offset %d in %q", offset, self.Name)
+		return 0, nil, err
 	}
-	relative_offset, chunk_size, err := self.Search(bucket, offset, timestamp, tags...)
-	check(err)
-
+	relative_offset, chunk_size := self.Search(bucket, offset, timestamp, tags...)
+	if chunk_size == 0 {
+		next_offset := bucket.Offset + bucket.Size
+		return next_offset, nil, nil
+	}
 	// Read actual content
 	filename := path.Join(self.Root, bucket.Name)
 	bucket_fh, err := mmap.Open(filename + ".franz")
@@ -222,13 +225,14 @@ func (self *Tube) Read(offset int64, timestamp int64, tags ...string) ([]byte, e
 	chunk_content := make([]byte, chunk_size)
 	_, err = bucket_fh.ReadAt(chunk_content, relative_offset)
 	check(err)
-	return chunk_content, nil
+
+	next_offset := bucket.Offset + relative_offset + chunk_size
+	return next_offset, chunk_content, nil
 }
 
-func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...string) (int64, int64, error) {
+func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...string) (int64, int64) {
 	// Find the next starting block whose position is bigger or equal
 	// to offset and timestamp
-
 	filename := path.Join(self.Root, bucket.Name)
 	// offset inside the bucket is relative to the offset of the
 	// bucket itself
@@ -237,7 +241,12 @@ func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...
 	// Search for a common offset among given tags (XXX timestamp?)
 	for _, tag := range tags {
 		tag_idx_fh, err := mmap.Open(filename + "-" + tag + ".idx")
-		check(err)
+		if os.IsNotExist(err) {
+			relative_offset = bucket.Size
+			continue
+		} else {
+			check(err)
+		}
 		defer tag_idx_fh.Close()
 
 		// Each index item take 2x32bits (4 bytes)
@@ -250,8 +259,16 @@ func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...
 		})
 
 		// Forward offset to first matching position for tag
-		tag_idx_fh.ReadAt(buff, int64(pos)*4)
-		relative_offset = int64(binary.LittleEndian.Uint32(buff))
+		if pos < nb_pos {
+			tag_idx_fh.ReadAt(buff, int64(pos)*4)
+			new_offset := int64(binary.LittleEndian.Uint32(buff))
+			if new_offset > relative_offset {
+				relative_offset = new_offset
+			}
+		} else {
+			// No matching offset in tag file
+			relative_offset = bucket.Size
+		}
 	}
 
 	// Search in the main index to discover block boundary
@@ -268,7 +285,7 @@ func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...
 		check(err)
 		idx_os := binary.LittleEndian.Uint32(buff)
 
-		_, err = idx_fh.ReadAt(buff, int64(i)*8 + 4)
+		_, err = idx_fh.ReadAt(buff, int64(i)*8+4)
 		check(err)
 		idx_ts := binary.LittleEndian.Uint32(buff)
 
@@ -288,6 +305,5 @@ func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...
 		value := binary.LittleEndian.Uint32(buff)
 		chunk_size = int64(value) - relative_offset
 	}
-
-	return relative_offset, chunk_size, nil
+	return relative_offset, chunk_size
 }

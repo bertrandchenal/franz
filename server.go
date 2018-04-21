@@ -57,10 +57,11 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			name := string(items[1])
 			data := items[2]
 			hub := self.GetHub(name)
-			tags := make([]string, len(items)-3)
-			for item := range items[3:] {
-				tags = append(tags, string(item))
+			tags := make([]string, 0)
+			for pos := 3; pos < len(items); pos++ {
+				tags = append(tags, string(items[pos]))
 			}
+
 			hub.Publish(data, tags...)
 			if err := websocket.Message.Send(ws, []byte("OK")); err != nil {
 				log.Println("[SEND]", err)
@@ -71,26 +72,38 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			name := string(items[1])
 			hub := self.GetHub(name)
 			offset := int64(0)
+			timestamp := int64(0)
+			tags := make([]string, 0)
+			// Extract offset
 			if len(items) > 2 {
 				i, err := strconv.Atoi(string(items[2]))
 				check(err)
 				offset = int64(i)
 			}
+			// Extract timestamp
+			if len(items) > 3 {
+				i, err := strconv.Atoi(string(items[3]))
+				check(err)
+				timestamp = int64(i)
+			}
+			// Extract tags
+			for pos := 4; pos < len(items); pos++ {
+				tags = append(tags, string(items[pos]))
+			}
 			for {
-				resp_chan := hub.Subscribe(offset, 0)  // TODO pass ts
+				resp_chan := hub.Subscribe(offset, timestamp, tags...)
 				msg := <-resp_chan
 				if msg.status == not_found {
-					if err := websocket.Message.Send(ws, []byte("KO")); err != nil {
-						log.Println("[KO SEND]", err)
-					}
 					break
 				}
-
-				if err := websocket.Message.Send(ws, msg.data); err != nil {
+				next_offset := []byte(string(msg.next_offset))
+				payload := msg.data
+				payload = append(payload, next_offset...)
+				if err := websocket.Message.Send(ws, payload); err != nil {
 					log.Println("[MSG SEND]", err)
 					break
 				}
-				offset += int64(len(msg.data))
+				offset = msg.next_offset
 			}
 		}
 

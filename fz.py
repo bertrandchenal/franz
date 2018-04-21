@@ -9,28 +9,52 @@ from websocket import _logging, WebSocketTimeoutException
 websocket.enableTrace(False)
 _logging._logger.setLevel('ERROR')
 
+ts2dt = lambda x: x if not x else datetime.fromtimestamp(x)
+dt2ts = lambda x: x if not x else mktime(x.timetuple())
+pack = lambda *xs: ''.join('%s:%s,' % (len(x) , x) for x in xs)
 
-def pub(ws, tube, *lines):
+def mktime(time_str):
+    if isinstance(time_str, datetime):
+        return time_str
+    elif isinstance(time_str, date):
+        return datetime(time_str.year, time_str.month, time_str.day)
+
+    candidates = [
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d %H:%M',
+        '%Y-%m-%d',
+    ]
+    for fmt in candidates:
+        try:
+            return datetime.strptime(time_str, fmt)
+        except ValueError:
+            pass
+    raise ValueError('Unable to parse "%s" as datetime' % time_str)
+
+
+def pub(ws, tube, tags=None, lines=None):
     if not lines:
         lines = (l.strip() for l in sys.stdin)
     for line in lines:
-        ws.send('7:publish,%s:%s,%s:%s,' % (
-            len(tube), tube, len(line), line))
-    ws.recv()
+        msg = pack('publish', tube, line, *tags)
+        ws.send(msg)
+        ws.recv()
 
 
-def send_sub(ws, tube, offset):
-    msg = '9:subscribe,%s:%s,' % (len(tube), tube)
-    if offset:
-        offset = str(offset)
-        msg += '%s:%s,' % (len(offset), offset)
+def send_sub(ws, tube, offset=None, timestamp=None, tags=None):
+    offset = str(offset or 0)
+    if timestamp:
+        timestamp = str(dt2ts(timestamp))
+    else:
+        timestamp = '0'
+    tags = tags or []
+    msg = pack('subscribe', tube, offset, timestamp, *tags)
     ws.send(msg)
 
 
-def sub(ws, tube, offset=0, follow=False):
-    send_sub(ws, tube, offset)
-    if not follow:
-        ws.settimeout(1)
+def sub(ws, tube, offset=None, timestamp=None, tags=None, follow=False):
+    offset = offset or 0
+    send_sub(ws, tube, offset, timestamp, tags)
     while True:
         try:
             data = ws.recv()
@@ -40,31 +64,19 @@ def sub(ws, tube, offset=0, follow=False):
         yield data
 
 
-def bench(ws):
-    payload = 'bench' * 1000
-    start = time()
-    for i in range(100):
-        resp = pub(ws, 'bench', payload)
-        assert resp == b'OK'
-    print('PUB', time() - start)
-
-    start = time()
-    cnt = 0
-    for msg in sub(ws, 'bench'):
-        assert payload == msg.decode()
-        cnt += 1
-        if cnt == 100:
-            break
-    print('SUB', time() - start)
-
-
 def main(cli):
     ws = websocket.create_connection("ws://localhost:9090/ws")
-    action, *args = cli['action']
+    ws.settimeout(1)
+    action, tube, *args = cli.action
     if action == 'pub':
-        pub(ws, *args)
+        pub(ws, tube, tags=cli.tags, lines=args)
     elif action == 'sub':
-        for chunk in sub(ws, *args, follow=cli['follow']):
+        chunks = sub(ws, tube,
+                     offset=cli.offset,
+                     timestamp=cli.timestamp,
+                     tags=cli.tags,
+                     follow=cli.follow)
+        for chunk in chunks:
             print(chunk.decode('utf-8'))
     elif action == 'bench':
         bench(ws)
@@ -79,6 +91,17 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--follow', action='store_true',
                         help='Wait for new content when end of tube is reached',
                         )
+    parser.add_argument('-t', '--tags', action='append', default=[],
+                        help='Specify one or several tags',
+                        )
+    parser.add_argument('-T', '--timestamp', type=mktime,
+                        help='Filter by timestamp',
+                        )
+    parser.add_argument('-o', '--offset', type=int,
+                        help='Filter by offset',
+                        )
     cli = parser.parse_args()
-
-    main(vars(cli))
+    if not cli.action:
+        parser.print_help()
+    else:
+        main(cli)

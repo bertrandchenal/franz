@@ -73,7 +73,7 @@ func TestAppend(t *testing.T) {
 	}
 
 	// Read by tag
-	content, err = tube.Read(0, "ham", "spam")
+	content, err = tube.Read(0, 0, "ham", "spam")
 	if err != nil {
 		panic(err)
 	}
