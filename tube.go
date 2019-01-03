@@ -74,7 +74,7 @@ func ScanBuckets(root string) BucketList {
 		defer idx_fh.Close()
 		buff := make([]byte, 4)
 		_, err = idx_fh.ReadAt(buff, 4)
-		timestamp := int64(binary.LittleEndian.Uint32(buff))
+		timestamp := int64(binary.BigEndian.Uint32(buff))
 
 		// Instanciate bucket object and append it
 		new_bucket := NewBucket(bucket_offset, file.Size(), timestamp)
@@ -94,7 +94,6 @@ func NewTube(root string, name string) *Tube {
 	buckets := ScanBuckets(root)
 	tube_len := MaxOffset(buckets)
 	sort.Sort(buckets)
-
 	return &Tube{
 		Name:         name,
 		Root:         root,
@@ -154,7 +153,6 @@ func (self *Tube) TailBucket(chunk_size int64, now int64) *Bucket {
 
 func (self *Tube) Append(data []byte, tags ...string) error {
 	// Append data to tube and add data offset to the given tag indexes
-
 	self.append_mutex.Lock()
 	defer func() {
 		self.append_mutex.Unlock()
@@ -175,9 +173,8 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 	// Append file size and timestamp to indexes
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
 	timestamp_buff := make([]byte, 4)
-	println(self.Len, now)
-	binary.LittleEndian.PutUint32(offset_buff, uint32(self.Len))
-	binary.LittleEndian.PutUint32(timestamp_buff, uint32(now))
+	binary.BigEndian.PutUint32(offset_buff, uint32(self.Len))
+	binary.BigEndian.PutUint32(timestamp_buff, uint32(now))
 	idx_row := append(offset_buff, timestamp_buff...)
 	err = self.UpdateIndex(filename, idx_row)
 	check(err)
@@ -255,14 +252,14 @@ func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...
 		buff := make([]byte, 4)
 		pos := sort.Search(nb_pos, func(i int) bool {
 			tag_idx_fh.ReadAt(buff, int64(i)*4)
-			value := binary.LittleEndian.Uint32(buff)
+			value := binary.BigEndian.Uint32(buff)
 			return int64(value) >= relative_offset
 		})
 
 		// Forward offset to first matching position for tag
 		if pos < nb_pos {
 			tag_idx_fh.ReadAt(buff, int64(pos)*4)
-			new_offset := int64(binary.LittleEndian.Uint32(buff))
+			new_offset := int64(binary.BigEndian.Uint32(buff))
 			if new_offset > relative_offset {
 				relative_offset = new_offset
 			}
@@ -284,11 +281,11 @@ func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...
 	pos := sort.Search(nb_pos, func(i int) bool {
 		_, err = idx_fh.ReadAt(buff, int64(i)*8)
 		check(err)
-		idx_os := binary.LittleEndian.Uint32(buff)
+		idx_os := binary.BigEndian.Uint32(buff)
 
 		_, err = idx_fh.ReadAt(buff, int64(i)*8+4)
 		check(err)
-		idx_ts := binary.LittleEndian.Uint32(buff)
+		idx_ts := binary.BigEndian.Uint32(buff)
 
 		return int64(idx_os) >= relative_offset && int64(idx_ts) >= timestamp
 	})
@@ -303,7 +300,7 @@ func (self *Tube) Search(bucket *Bucket, offset int64, timestamp int64, tags ...
 	} else {
 		_, err = idx_fh.ReadAt(buff, int64(next_pos)*8)
 		check(err)
-		value := binary.LittleEndian.Uint32(buff)
+		value := binary.BigEndian.Uint32(buff)
 		chunk_size = int64(value) - relative_offset
 	}
 	return relative_offset, chunk_size

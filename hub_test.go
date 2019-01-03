@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func TestSubscribeFirst(t *testing.T) {
+func TestHubSubscribeFirst(t *testing.T) {
 	cleanup()
 	tube := NewTube(TEST_DIR, "hub-test")
 	hub := NewHub(tube)
@@ -20,11 +20,11 @@ func TestSubscribeFirst(t *testing.T) {
 		} else {
 			tag = "odd"
 		}
+		hub.Publish(hello, tag)
 		go func() {
 			time.Sleep(time.Duration(i) * time.Nanosecond)
 			hub.Publish(hello, tag)
 		}()
-		hub.Publish(hello, tag)
 	}
 
 	msg := <-early_chan
@@ -34,7 +34,7 @@ func TestSubscribeFirst(t *testing.T) {
 
 	// test without tags
 	offset := int64(0)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		resp_chan := hub.Subscribe(offset, 0)
 		msg := <-resp_chan
 		if msg.status == not_found {
@@ -48,11 +48,10 @@ func TestSubscribeFirst(t *testing.T) {
 	}
 }
 
-func TestPublishFirst(t *testing.T) {
+func TestHubPublishFirst(t *testing.T) {
 	cleanup()
 	tube := NewTube(TEST_DIR, "hub-test")
 	hub := NewHub(tube)
-
 	hello := []byte("hello")
 	for i := 0; i < 5; i++ {
 		var tag string
@@ -70,7 +69,7 @@ func TestPublishFirst(t *testing.T) {
 
 	// test without tags
 	offset := int64(0)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		resp_chan := hub.Subscribe(offset, 0)
 		msg := <-resp_chan
 		if msg.status == not_found {
@@ -80,6 +79,6 @@ func TestPublishFirst(t *testing.T) {
 		if string(msg.data) != string(hello) {
 			t.Error("Unexpected value:", string(msg.data))
 		}
-		offset += int64(len(msg.data))
+		offset = msg.next_offset
 	}
 }

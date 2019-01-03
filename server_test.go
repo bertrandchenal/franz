@@ -16,7 +16,7 @@ const address string = "localhost:8080"
 func TestServer(t *testing.T) {
 	root := TEST_DIR
 	bind := ":8080"
-	server := NewServer(&root, &bind)
+	server := NewServer(root, bind)
 	go server.Run()
 
 	ws, err := websocket.Dial(fmt.Sprintf("ws://%s/ws", address), "", fmt.Sprintf("http://%s/", address))

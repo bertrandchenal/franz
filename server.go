@@ -14,9 +14,9 @@ type Server struct {
 	hubs      map[string]*Hub
 }
 
-func NewServer(root_path *string, address *string) *Server {
+func NewServer(root_path string, address string) *Server {
 	hubs := make(map[string]*Hub)
-	return &Server{*root_path, *address, hubs}
+	return &Server{root_path, address, hubs}
 }
 
 func (self *Server) Run() {
@@ -96,9 +96,12 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 				if msg.status == not_found {
 					break
 				}
-				next_offset := []byte(string(msg.next_offset))
-				payload := msg.data
-				payload = append(payload, next_offset...)
+				next_offset := strconv.FormatInt(msg.next_offset, 10)
+				payload, err := netstring.Encode(msg.data, []byte(next_offset))
+				if err != nil {
+					log.Println("[MSG SEND]", err)
+					break
+				}
 				if err := websocket.Message.Send(ws, payload); err != nil {
 					log.Println("[MSG SEND]", err)
 					break

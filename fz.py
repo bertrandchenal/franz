@@ -6,12 +6,32 @@ import sys
 import websocket
 from websocket import _logging, WebSocketTimeoutException
 
-websocket.enableTrace(False)
-_logging._logger.setLevel('ERROR')
+# websocket.enableTrace(False)
+# _logging._logger.setLevel('ERROR')
 
 ts2dt = lambda x: x if not x else datetime.fromtimestamp(x)
 dt2ts = lambda x: x if not x else mktime(x.timetuple())
-pack = lambda *xs: ''.join('%s:%s,' % (len(x) , x) for x in xs)
+
+
+def pack(*items):
+    '''
+    Pack items as a netstring
+    '''
+    return ''.join('%s:%s,' % (len(x) , x) for x in items)
+
+
+def unpack(data):
+    '''
+    Unpack netstring
+    '''
+    while data:
+        head, tail = data.split(b':', 1)
+        length = int(head)
+        item = tail[:length]
+        assert tail[length:length+1] == b','
+        yield item
+        data = tail[length + 1:]
+
 
 def mktime(time_str):
     if isinstance(time_str, datetime):
@@ -57,11 +77,16 @@ def sub(ws, tube, offset=None, timestamp=None, tags=None, follow=False):
     send_sub(ws, tube, offset, timestamp, tags)
     while True:
         try:
-            data = ws.recv()
-            offset += len(data)
+            payload = ws.recv()
         except WebSocketTimeoutException:
-            break
-        yield data
+            if follow:
+                send_sub(ws, tube, offset, timestamp, tags)
+            else:
+                break
+        else:
+            msg, offset = unpack(payload)
+            offset = int(offset)
+            yield msg.decode('utf-8')
 
 
 def main(cli):
@@ -77,7 +102,7 @@ def main(cli):
                      tags=cli.tags,
                      follow=cli.follow)
         for chunk in chunks:
-            print(chunk.decode('utf-8'))
+            print(chunk)
     elif action == 'bench':
         bench(ws)
     else:
@@ -85,9 +110,11 @@ def main(cli):
 
     ws.close()
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', nargs='*', help='pub|sub')
+    parser.add_argument('action', nargs='*',
+                        help='pub <tube> <msg> |sub <tube>')
     parser.add_argument('-f', '--follow', action='store_true',
                         help='Wait for new content when end of tube is reached',
                         )
