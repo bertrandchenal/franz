@@ -1,8 +1,8 @@
 package franz
 
 import (
-	"github.com/yawn/netstring"
 	"golang.org/x/net/websocket"
+	"bitbucket.org/bertrandchenal/netstring"
 	"log"
 	"net/http"
 	"strconv"

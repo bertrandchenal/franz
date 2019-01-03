@@ -175,6 +175,7 @@ func (self *Tube) Append(data []byte, tags ...string) error {
 	// Append file size and timestamp to indexes
 	offset_buff := make([]byte, 4) // TODO use explicit type, test if offset fit on 32bit
 	timestamp_buff := make([]byte, 4)
+	println(self.Len, now)
 	binary.LittleEndian.PutUint32(offset_buff, uint32(self.Len))
 	binary.LittleEndian.PutUint32(timestamp_buff, uint32(now))
 	idx_row := append(offset_buff, timestamp_buff...)

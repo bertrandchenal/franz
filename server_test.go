@@ -2,7 +2,7 @@ package franz
 
 import (
 	"fmt"
-	"github.com/yawn/netstring"
+	"bitbucket.org/bertrandchenal/netstring"
 	"golang.org/x/net/websocket"
 	"log"
 	// "net/http"

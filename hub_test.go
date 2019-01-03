@@ -10,7 +10,7 @@ func TestSubscribeFirst(t *testing.T) {
 	tube := NewTube(TEST_DIR, "hub-test")
 	hub := NewHub(tube)
 
-	early_chan := hub.Subscribe(0)
+	early_chan := hub.Subscribe(0, 0)
 	hello := []byte("hello")
 
 	for i := 0; i < 5; i++ {
@@ -35,7 +35,7 @@ func TestSubscribeFirst(t *testing.T) {
 	// test without tags
 	offset := int64(0)
 	for i := 0; i < 5; i++ {
-		resp_chan := hub.Subscribe(offset)
+		resp_chan := hub.Subscribe(offset, 0)
 		msg := <-resp_chan
 		if msg.status == not_found {
 			panic("NOT FOUND")
@@ -71,14 +71,14 @@ func TestPublishFirst(t *testing.T) {
 	// test without tags
 	offset := int64(0)
 	for i := 0; i < 5; i++ {
-		resp_chan := hub.Subscribe(offset)
+		resp_chan := hub.Subscribe(offset, 0)
 		msg := <-resp_chan
 		if msg.status == not_found {
-			panic("NOT FOUND")
+			t.Errorf("Nothing found at offset %v", offset)
 			continue
 		}
 		if string(msg.data) != string(hello) {
-			t.Error("Unexpected value:", msg.data)
+			t.Error("Unexpected value:", string(msg.data))
 		}
 		offset += int64(len(msg.data))
 	}

@@ -56,7 +56,7 @@ func TestAppend(t *testing.T) {
 	}
 
 	// Check that actual content is there
-	content, err := tube.Read(0)
+	next, content, err := tube.Read(0, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -64,7 +64,7 @@ func TestAppend(t *testing.T) {
 		t.Error("Unexpected value")
 	}
 
-	content, err = tube.Read(int64(len(hello)))
+	_, content, err = tube.Read(next, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -73,7 +73,7 @@ func TestAppend(t *testing.T) {
 	}
 
 	// Read by tag
-	content, err = tube.Read(0, 0, "ham", "spam")
+	_, content, err = tube.Read(0, 0, "ham", "spam")
 	if err != nil {
 		panic(err)
 	}
