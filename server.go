@@ -1,8 +1,8 @@
 package franz
 
 import (
-	"golang.org/x/net/websocket"
 	"bitbucket.org/bertrandchenal/netstring"
+	"golang.org/x/net/websocket"
 	"log"
 	"net/http"
 	"strconv"
@@ -28,6 +28,7 @@ func (self *Server) Run() {
 }
 
 func (self *Server) GetHub(name string) *Hub {
+	// TODO sanitize name!
 	hub, found := self.hubs[name]
 	if !found {
 		tube := NewTube(self.root_path, name)

@@ -47,7 +47,6 @@ func (buckets BucketList) Less(i, j int) bool {
 
 // Loop on all files of the given directory and detect buckets
 func ScanBuckets(root string) BucketList {
-	os.MkdirAll(root, 0750)
 	files, err := ioutil.ReadDir(root)
 	if err != nil {
 		log.Fatal(err)
@@ -91,6 +90,7 @@ func NewBucket(offset int64, size int64, timestamp int64) *Bucket {
 
 func NewTube(root string, name string) *Tube {
 	root = path.Join(root, name)
+	os.MkdirAll(root, 0750)
 	buckets := ScanBuckets(root)
 	tube_len := MaxOffset(buckets)
 	sort.Sort(buckets)

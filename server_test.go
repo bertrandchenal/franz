@@ -1,8 +1,8 @@
 package franz
 
 import (
-	"fmt"
 	"bitbucket.org/bertrandchenal/netstring"
+	"fmt"
 	"golang.org/x/net/websocket"
 	"log"
 	// "net/http"
