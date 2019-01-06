@@ -87,13 +87,22 @@ func (self *Hub) Broadcast(new_ticket *Ticket) {
 			continue
 		}
 		// Answer to subscribers
-		next_offset, data, err := self.tube.Read(ticket.offset, ticket.timestamp, ticket.tags...)
+		next_offset, data, err := self.tube.Read(ticket.offset,
+			ticket.timestamp, ticket.tags...)
 		if err != nil {
 			panic(err)
 		} else if data == nil {
-			ticket.resp_chan <- &Response{data: nil, next_offset: next_offset, status: not_found}
+			ticket.resp_chan <- &Response{
+				data:        nil,
+				next_offset: next_offset,
+				status:      not_found,
+			}
 		} else {
-			ticket.resp_chan <- &Response{data: data, next_offset: next_offset, status: success}
+			ticket.resp_chan <- &Response{
+				data:        data,
+				next_offset: next_offset,
+				status:      success,
+			}
 		}
 		// Clear pool
 		self.ticket_pool = new_pool

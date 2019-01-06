@@ -54,9 +54,9 @@ def mktime(time_str):
 
 def pub(ws, tube, tags=None, lines=None):
     if not lines:
-        lines = (l.strip() for l in sys.stdin)
+        lines = [sys.stdin.read().strip()]
     for line in lines:
-        msg = pack('publish', tube, line, *tags)
+        msg = pack('pub', tube, line, *tags)
         ws.send(msg)
         ws.recv()
 
@@ -68,7 +68,7 @@ def send_sub(ws, tube, offset=None, timestamp=None, tags=None):
     else:
         timestamp = '0'
     tags = tags or []
-    msg = pack('subscribe', tube, offset, timestamp, *tags)
+    msg = pack('sub', tube, offset, timestamp, *tags)
     ws.send(msg)
 
 

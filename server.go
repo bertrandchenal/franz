@@ -3,6 +3,7 @@ package franz
 import (
 	"bitbucket.org/bertrandchenal/netstring"
 	"golang.org/x/net/websocket"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -38,78 +39,89 @@ func (self *Server) GetHub(name string) *Hub {
 	return hub
 }
 
+func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
+	name := string(args[0])
+	data := args[1]
+	hub := self.GetHub(name)
+	tags := make([]string, 0)
+	for _, tag := range args[2:] {
+		tags = append(tags, string(tag))
+	}
+
+	hub.Publish(data, tags...)
+	if err := websocket.Message.Send(ws, []byte("OK")); err != nil {
+		log.Println("[SEND]", err)
+	}
+}
+
+func (self *Server) Subscribe(ws *websocket.Conn, args [][]byte) {
+	name := string(args[0])
+	hub := self.GetHub(name)
+	offset := int64(0)
+	timestamp := int64(0)
+	tags := make([]string, 0)
+	// Extract offset
+	if len(args) > 1 {
+		i, err := strconv.Atoi(string(args[1]))
+		check(err)
+		offset = int64(i)
+	}
+	// Extract timestamp
+	if len(args) > 2 {
+		i, err := strconv.Atoi(string(args[2]))
+		check(err)
+		timestamp = int64(i)
+	}
+	// Extract tags
+	for _, tag := range args[3:] {
+		tags = append(tags, string(tag))
+	}
+	for {
+		resp_chan := hub.Subscribe(offset, timestamp, tags...)
+		msg := <-resp_chan
+		if msg.status == not_found {
+			break
+		}
+		next_offset := strconv.FormatInt(msg.next_offset, 10)
+		payload, err := netstring.Encode(msg.data, []byte(next_offset))
+		if err != nil {
+			log.Println("[ENCODE SEND]", err)
+			break
+		}
+		if err := websocket.Message.Send(ws, payload); err != nil {
+			log.Println("[MSG SEND]", err)
+			break
+		}
+		offset = msg.next_offset
+	}
+}
+
 func (self *Server) WSHandler(ws *websocket.Conn) {
 	for {
-		var reply []byte
-		if err := websocket.Message.Receive(ws, &reply); err != nil {
-			log.Println("[RECV]", err)
+		var payload []byte
+		if err := websocket.Message.Receive(ws, &payload); err != nil {
+			if err != io.EOF {
+				log.Println("[RECEIVE]", err)
+			}
 			break
 		}
-
-		items, err := netstring.Decode(reply)
+		items, err := netstring.Decode(payload)
 		if err != nil {
-			log.Println("[DECO]", err)
+			log.Println("[DECODE]", err)
 			break
 		}
-
+		if len(items) == 0 {
+			log.Println("[EMPTY]")
+			continue
+		}
 		action := string(items[0])
 		switch action {
-		case "publish":
-			name := string(items[1])
-			data := items[2]
-			hub := self.GetHub(name)
-			tags := make([]string, 0)
-			for pos := 3; pos < len(items); pos++ {
-				tags = append(tags, string(items[pos]))
-			}
-
-			hub.Publish(data, tags...)
-			if err := websocket.Message.Send(ws, []byte("OK")); err != nil {
-				log.Println("[SEND]", err)
-				break
-			}
-
-		case "subscribe":
-			name := string(items[1])
-			hub := self.GetHub(name)
-			offset := int64(0)
-			timestamp := int64(0)
-			tags := make([]string, 0)
-			// Extract offset
-			if len(items) > 2 {
-				i, err := strconv.Atoi(string(items[2]))
-				check(err)
-				offset = int64(i)
-			}
-			// Extract timestamp
-			if len(items) > 3 {
-				i, err := strconv.Atoi(string(items[3]))
-				check(err)
-				timestamp = int64(i)
-			}
-			// Extract tags
-			for pos := 4; pos < len(items); pos++ {
-				tags = append(tags, string(items[pos]))
-			}
-			for {
-				resp_chan := hub.Subscribe(offset, timestamp, tags...)
-				msg := <-resp_chan
-				if msg.status == not_found {
-					break
-				}
-				next_offset := strconv.FormatInt(msg.next_offset, 10)
-				payload, err := netstring.Encode(msg.data, []byte(next_offset))
-				if err != nil {
-					log.Println("[MSG SEND]", err)
-					break
-				}
-				if err := websocket.Message.Send(ws, payload); err != nil {
-					log.Println("[MSG SEND]", err)
-					break
-				}
-				offset = msg.next_offset
-			}
+		case "pub":
+			self.Publish(ws, items[1:])
+		case "sub":
+			self.Subscribe(ws, items[1:])
+		default:
+			log.Println("[UNKNOWN]", action)
 		}
-
 	}
 }
