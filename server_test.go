@@ -35,7 +35,7 @@ func TestServer(t *testing.T) {
 }
 
 func sendMessage(ws *websocket.Conn) string {
-	buff, err := netstring.Encode(
+	msg, err := netstring.Encode(
 		[]byte("publish"),     //Action
 		[]byte("server-test"), //Tube
 		[]byte("bar"),         // Message
@@ -43,7 +43,7 @@ func sendMessage(ws *websocket.Conn) string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = websocket.Message.Send(ws, msg.Bytes())
+	err = websocket.Message.Send(ws, msg)
 	if err != nil {
 		fmt.Printf("Write failed: %s\n", err.Error())
 		os.Exit(1e3)

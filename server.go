@@ -11,19 +11,28 @@ import (
 
 type Server struct {
 	root_path string
-	address   string
+	bind   string
 	hubs      map[string]*Hub
+	member *Member
 }
 
-func NewServer(root_path string, address string) *Server {
+func NewServer(root_path string, bind string) *Server {
 	hubs := make(map[string]*Hub)
-	return &Server{root_path, address, hubs}
+	return &Server{root_path, bind, hubs, nil}
+}
+
+func (self *Server) Join(peers []string) {
+	if self.member == nil {
+		self.member = NewMember(self.bind, peers)
+	} else {
+		self.member.AddPeers(peers)
+	}
 }
 
 func (self *Server) Run() {
 	http.Handle("/ws", websocket.Handler(self.WSHandler))
 	log.Println("Server started")
-	if err := http.ListenAndServe(self.address, nil); err != nil {
+	if err := http.ListenAndServe(self.bind, nil); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
 }
@@ -43,7 +52,7 @@ func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
 	name := string(args[0])
 	data := args[1]
 	hub := self.GetHub(name)
-	tags := make([]string, 0)
+	tags := []string{}
 	for _, tag := range args[2:] {
 		tags = append(tags, string(tag))
 	}
@@ -54,12 +63,18 @@ func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
 	}
 }
 
+func (self *Server) Ping(ws *websocket.Conn) {
+	if err := websocket.Message.Send(ws, []byte("pong")); err != nil {
+		log.Println("[PING]", err)
+	}
+}
+
 func (self *Server) Subscribe(ws *websocket.Conn, args [][]byte) {
 	name := string(args[0])
 	hub := self.GetHub(name)
 	offset := int64(0)
 	timestamp := int64(0)
-	tags := make([]string, 0)
+	tags := []string{}
 	// Extract offset
 	if len(args) > 1 {
 		i, err := strconv.Atoi(string(args[1]))
@@ -120,6 +135,8 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			self.Publish(ws, items[1:])
 		case "sub":
 			self.Subscribe(ws, items[1:])
+		case "ping":
+			self.Ping(ws)
 		default:
 			log.Println("[UNKNOWN]", action)
 		}

@@ -39,6 +39,21 @@ func (self *Client) Publish(tube string, msg []byte) {
 	// println(string(payload))
 }
 
+func (self *Client) Ping() bool {
+	self.Connect()
+	payload, err := netstring.Encode(
+		[]byte("ping"),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := websocket.Message.Send(self.ws, payload); err != nil {
+		log.Fatal(err)
+	}
+	websocket.Message.Receive(self.ws, &payload)
+	return string(payload) == "pong"
+}
+
 func (self *Client) Subscribe(tube string) {
 	self.Connect()
 	var payload []byte
