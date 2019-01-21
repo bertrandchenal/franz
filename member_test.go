@@ -2,10 +2,11 @@ package franz
 
 import (
 	"testing"
+	"time"
 )
 
-func filterString(list []string,  to_filter string) []string {
-	res := make([]string, len(list) - 1)
+func filterString(list []string, to_filter string) []string {
+	res := make([]string, 0, len(list)-1)
 	for _, item := range list {
 		if item == to_filter {
 			continue
@@ -21,15 +22,44 @@ func setup(binds []string) []*Server {
 		others := filterString(binds, bind)
 		root := TEST_DIR
 		server := NewServer(root, bind)
-		go server.Join(others)
 		go server.Run()
+		go server.Join(others)
 		servers[pos] = server
 	}
 	return servers
 }
 
 func TestPing(t *testing.T) {
-	binds := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
+	binds := []string{"localhost:9090", "localhost:9091", "localhost:9092"}
 	servers := setup(binds)
-	println(len(servers))
+	time.Sleep(2e9)
+
+	// Check if all servers are seeing each others
+	up_count := 0
+	for _, server := range servers {
+		for _, peer := range server.member.Peers {
+			if peer.Status == UP {
+				up_count += 1
+			}
+		}
+	}
+	if up_count != 6 {
+		t.Errorf("Expected 9, got: %v", up_count)
+	}
+
+	// Stop one server
+	servers[0].Stop()
+	time.Sleep(2e9)
+	up_count = 0
+	for _, server := range servers[1:] {
+		for _, peer := range server.member.Peers {
+			if peer.Status == UP {
+				up_count += 1
+			}
+		}
+	}
+	if up_count != 4 {
+		t.Errorf("Expected 4, got: %v", up_count)
+	}
+
 }

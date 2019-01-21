@@ -1,6 +1,7 @@
 package franz
 
 import (
+	"log"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type PeerList []*Peer
 type Peer struct {
 	Client *Client
 	Status Status
+	Peers []string
 }
 type Member struct {
 	Bind  string
@@ -39,20 +41,21 @@ func NewPeerList(binds []string) PeerList {
 }
 
 func NewPeer(bind string) *Peer {
-	client := NewClient(bind)
-	peer := Peer{client, UP}
+	client := NewClient("ws://" + bind + "/ws")
+	peer := Peer{client, UP, nil}
 	return &peer
 }
 
 func (self *Member) discover() {
 	for {
 		for _, peer := range self.Peers {
-			ok := peer.Ping()
+			ok := peer.GetPeers()
+			// TODO update own list of peers
 			if !ok {
 				println("Peer is down")
 			}
 		}
-		time.Sleep(1000000)
+		time.Sleep(1e9)
 	}
 }
 
@@ -60,10 +63,13 @@ func (self *Member) AddPeers(peers []string) {
 	// TODO
 }
 
-func (self *Peer) Ping() bool {
-	ok := self.Client.Ping()
+func (self *Peer) GetPeers() bool {
+	peers := self.Client.Peers() // FIXME without a timeout this may never return
+	ok := peers != nil
 	if ok {
 		self.Status = UP
+		self.Peers = peers
+		log.Printf("%v", peers)
 	} else {
 		// TODO we may want to retry a bit later before deciding on Status
 		self.Status = DOWN

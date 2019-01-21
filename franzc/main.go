@@ -13,6 +13,7 @@ import (
 func main() {
 	var server = flag.String("server", "ws://localhost:9090/ws", "Server address")
 	var publish = flag.String("p", "", "Publish in given tube")
+	var ping = flag.Bool("P", false, "Ping server")
 	var subscribe = flag.String("s", "", "Subscribe in tube")
 	flag.Parse()
 
@@ -35,6 +36,10 @@ func main() {
 	} else if *subscribe != "" {
 		client.Subscribe(*subscribe)
 
+	} else if *ping  {
+		if client.Ping() {
+			fmt.Println("Pong")
+		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()

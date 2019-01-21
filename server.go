@@ -1,6 +1,7 @@
 package franz
 
 import (
+	"context"
 	"bitbucket.org/bertrandchenal/netstring"
 	"golang.org/x/net/websocket"
 	"io"
@@ -10,15 +11,16 @@ import (
 )
 
 type Server struct {
-	root_path string
-	bind   string
-	hubs      map[string]*Hub
-	member *Member
+	root_path   string
+	bind        string
+	hubs        map[string]*Hub
+	member      *Member
+	http_server *http.Server
 }
 
 func NewServer(root_path string, bind string) *Server {
 	hubs := make(map[string]*Hub)
-	return &Server{root_path, bind, hubs, nil}
+	return &Server{root_path, bind, hubs, nil, nil}
 }
 
 func (self *Server) Join(peers []string) {
@@ -30,11 +32,24 @@ func (self *Server) Join(peers []string) {
 }
 
 func (self *Server) Run() {
-	http.Handle("/ws", websocket.Handler(self.WSHandler))
-	log.Println("Server started")
-	if err := http.ListenAndServe(self.bind, nil); err != nil {
-		log.Fatal("ListenAndServe:", err)
+	self.http_server = &http.Server{
+		Addr:    self.bind,
+		Handler: websocket.Handler(self.WSHandler),
 	}
+
+	log.Println("Server started", self.bind)
+	if err := self.http_server.ListenAndServe(); err != nil {
+		log.Printf("ListenAndServe: %v", err)
+	}
+}
+
+func (self *Server) Stop() {
+	err := self.http_server.Shutdown(context.Background())
+	if err != nil {
+		// Error from closing listeners, or context timeout:
+		log.Printf("HTTP server Shutdown: %v", err)
+	}
+	// TODO call stop on self.member
 }
 
 func (self *Server) GetHub(name string) *Hub {
@@ -66,6 +81,22 @@ func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
 func (self *Server) Ping(ws *websocket.Conn) {
 	if err := websocket.Message.Send(ws, []byte("pong")); err != nil {
 		log.Println("[PING]", err)
+	}
+}
+
+func (self *Server) Peers(ws *websocket.Conn) {
+	peers := []string{}
+	if self.member != nil {
+		for _, peer := range self.member.Peers {
+			peers = append(peers, peer.Client.url)
+		}
+	}
+	payload, err := netstring.EncodeString(peers ...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := websocket.Message.Send(ws, payload); err != nil {
+		log.Println("[PEERS]", err)
 	}
 }
 
@@ -137,6 +168,8 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			self.Subscribe(ws, items[1:])
 		case "ping":
 			self.Ping(ws)
+		case "peers":
+			self.Peers(ws)
 		default:
 			log.Println("[UNKNOWN]", action)
 		}
