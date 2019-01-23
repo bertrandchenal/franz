@@ -2,13 +2,14 @@ package franz
 
 import (
 	"testing"
+	// "time"
 )
 
-const address string = "localhost:8080"
+const address string = "localhost:9090"
 
-func TestServer(t *testing.T) {
+func TestServerPublish(t *testing.T) {
 	root := TEST_DIR
-	bind := "localhost:8080"
+	bind := "localhost:9090"
 	server := NewServer(root, bind)
 	go server.Run()
 
@@ -19,4 +20,5 @@ func TestServer(t *testing.T) {
 		t.Error("Unexpected value:", answer)
 	}
 }
+
 

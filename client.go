@@ -28,11 +28,11 @@ func (self *Client) Publish(tube string, msg []byte) []byte {
 		msg,
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("[ENCODE]",err)
 	}
 
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		log.Fatal(err)
+		log.Fatal("[SEND]", err)
 	}
 	websocket.Message.Receive(self.ws, &payload)
 	return payload
@@ -44,10 +44,10 @@ func (self *Client) Ping() bool {
 		[]byte("ping"),
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("[ENCODE]", err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		log.Fatal(err)
+		log.Fatal("[SEND]", err)
 	}
 	websocket.Message.Receive(self.ws, &payload)
 	return string(payload) == "pong"
@@ -59,15 +59,17 @@ func (self *Client) Peers() []string {
 		[]byte("peers"),
 	)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("[ENCODE]", err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		log.Fatal(err)
+		log.Println("[SEND]", err)
+		return nil
 	}
 	websocket.Message.Receive(self.ws, &payload)
 
 	// "peer" message returns the list of known peers
 	items, err := netstring.DecodeString(payload)
+
 	if err != nil {
 		log.Println(err)
 		return nil
@@ -103,7 +105,7 @@ func (self *Client) Subscribe(tube string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		println("GOT", items)
+		log.Println("DATA", items)
 	}
 }
 

@@ -44,12 +44,12 @@ func TestPing(t *testing.T) {
 		}
 	}
 	if up_count != 6 {
-		t.Errorf("Expected 9, got: %v", up_count)
+		t.Errorf("Expected 6, got: %v", up_count)
 	}
 
 	// Stop one server
-	servers[0].Stop()
-	time.Sleep(2e9)
+	servers[0].Shutdown()
+	time.Sleep(3e9)
 	up_count = 0
 	for _, server := range servers[1:] {
 		for _, peer := range server.member.Peers {
@@ -58,8 +58,8 @@ func TestPing(t *testing.T) {
 			}
 		}
 	}
-	if up_count != 4 {
-		t.Errorf("Expected 4, got: %v", up_count)
+	if up_count != 2 {
+		t.Errorf("Expected 2, got: %v", up_count)
 	}
 
 }

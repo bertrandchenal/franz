@@ -46,13 +46,14 @@ func NewPeer(bind string) *Peer {
 	return &peer
 }
 
+
 func (self *Member) discover() {
 	for {
 		for _, peer := range self.Peers {
 			ok := peer.GetPeers()
 			// TODO update own list of peers
 			if !ok {
-				println("Peer is down")
+				log.Println("Peer is down")
 			}
 		}
 		time.Sleep(1e9)
@@ -64,12 +65,11 @@ func (self *Member) AddPeers(peers []string) {
 }
 
 func (self *Peer) GetPeers() bool {
-	peers := self.Client.Peers() // FIXME without a timeout this may never return
+	peers := self.Client.Peers() // FIXME may fail if remote is not yet up
 	ok := peers != nil
 	if ok {
 		self.Status = UP
 		self.Peers = peers
-		log.Printf("%v", peers)
 	} else {
 		// TODO we may want to retry a bit later before deciding on Status
 		self.Status = DOWN

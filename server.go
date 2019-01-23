@@ -1,26 +1,33 @@
 package franz
 
 import (
-	"context"
 	"bitbucket.org/bertrandchenal/netstring"
+	"context"
 	"golang.org/x/net/websocket"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type Server struct {
-	root_path   string
-	bind        string
-	hubs        map[string]*Hub
-	member      *Member
-	http_server *http.Server
+	root_path     string
+	bind          string
+	hubs          map[string]*Hub
+	shutdown_chan chan time.Duration
+	member        *Member
+	http_server   *http.Server
 }
 
 func NewServer(root_path string, bind string) *Server {
 	hubs := make(map[string]*Hub)
-	return &Server{root_path, bind, hubs, nil, nil}
+	return &Server{
+		root_path: root_path,
+		bind:      bind,
+		hubs:      hubs,
+		shutdown_chan: make(chan time.Duration, 1),
+	}
 }
 
 func (self *Server) Join(peers []string) {
@@ -43,13 +50,14 @@ func (self *Server) Run() {
 	}
 }
 
-func (self *Server) Stop() {
+func (self *Server) Shutdown() {
 	err := self.http_server.Shutdown(context.Background())
 	if err != nil {
 		// Error from closing listeners, or context timeout:
 		log.Printf("HTTP server Shutdown: %v", err)
 	}
-	// TODO call stop on self.member
+	// Shutdown in flight connections
+	self.shutdown_chan <- 0 // TODO parametrize timeout
 }
 
 func (self *Server) GetHub(name string) *Hub {
@@ -91,7 +99,7 @@ func (self *Server) Peers(ws *websocket.Conn) {
 			peers = append(peers, peer.Client.url)
 		}
 	}
-	payload, err := netstring.EncodeString(peers ...)
+	payload, err := netstring.EncodeString(peers...)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -143,8 +151,18 @@ func (self *Server) Subscribe(ws *websocket.Conn, args [][]byte) {
 }
 
 func (self *Server) WSHandler(ws *websocket.Conn) {
+
+	go func() {
+		// Add quick deadline when server closes
+		nb_seconds := <-self.shutdown_chan
+		// TODO SEND message warning client
+		ws.SetDeadline(time.Now().Add(nb_seconds * time.Minute))
+		// Pass it forward
+		self.shutdown_chan <- nb_seconds
+	}()
+
+	var payload []byte
 	for {
-		var payload []byte
 		if err := websocket.Message.Receive(ws, &payload); err != nil {
 			if err != io.EOF {
 				log.Println("[RECEIVE]", err)
@@ -173,5 +191,6 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 		default:
 			log.Println("[UNKNOWN]", action)
 		}
+
 	}
 }
