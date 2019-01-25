@@ -61,6 +61,7 @@ func (self *Server) Shutdown() {
 }
 
 func (self *Server) GetHub(name string) *Hub {
+	// TODO should use a lock to prevent double-opening of the same hub
 	// TODO sanitize name!
 	hub, found := self.hubs[name]
 	if !found {

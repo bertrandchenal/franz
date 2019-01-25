@@ -56,6 +56,7 @@ func NewTicket(offset int64, timestamp int64, tags []string) *Ticket {
 }
 
 func (self *Hub) Publish(data []byte, tags ...string) {
+	// Create a message and add it to hub's pub chan
 	msg := Message{
 		data: data,
 		tags: tags,
@@ -64,6 +65,8 @@ func (self *Hub) Publish(data []byte, tags ...string) {
 }
 
 func (self *Hub) Subscribe(offset int64, timestamp int64, tags ...string) chan *Response {
+	// Create a ticket, add it to hub's subscribtion chan, returns
+	// ticket's response chan
 	ticket := NewTicket(offset, timestamp, tags)
 	self.sub_chan <- ticket
 	return ticket.resp_chan
