@@ -11,9 +11,7 @@ import (
 	"time"
 )
 
-var sLog = log.WithFields(log.Fields{
-	"who": "Server",
-})
+var sLog = log.WithField("who", "Server")
 
 type Server struct {
 	root_path     string
@@ -48,15 +46,13 @@ func (self *Server) Run() {
 		Handler: websocket.Handler(self.WSHandler),
 	}
 
-	bindLog := sLog.WithFields(log.Fields{
-		"bind": self.bind,
-	})
+	bindLog := sLog.WithField("bind", self.bind)
 	bindLog.Info("Server started")
 
 	if err := self.http_server.ListenAndServe(); err != http.ErrServerClosed {
 		bindLog.Warn("Server stopped on error: ", err)
 	} else {
-		bindLog.WithFields(log.Fields{}).Info("Server stopped")
+		bindLog.Info("Server stopped")
 	}
 }
 

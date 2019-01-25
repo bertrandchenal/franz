@@ -5,9 +5,7 @@ import (
 	"time"
 )
 
-var mLog = log.WithFields(log.Fields{
-	"who": "Member",
-})
+var mLog = log.WithField("who", "Member")
 
 const (
 	UP = iota
@@ -56,9 +54,7 @@ func (self *Member) discover() {
 			ok := peer.GetPeers()
 			// TODO update own list of peers
 			if !ok {
-				mLog.WithFields(log.Fields{
-					"remote": peer.Client.url,
-				}).Warn("Peer is down")
+				mLog.WithField("remote", peer.Client.url).Warn("Peer is down")
 			}
 		}
 		time.Sleep(1e9)

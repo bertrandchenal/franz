@@ -8,9 +8,7 @@ import (
 	// "time"
 )
 
-var cLog = log.WithFields(log.Fields{
-	"who": "Client",
-})
+var cLog = log.WithField("who", "Client")
 
 type Client struct {
 	url string
