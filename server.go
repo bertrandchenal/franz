@@ -3,13 +3,17 @@ package franz
 import (
 	"bitbucket.org/bertrandchenal/netstring"
 	"context"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+var sLog = log.WithFields(log.Fields{
+	"who": "Server",
+})
 
 type Server struct {
 	root_path     string
@@ -23,9 +27,9 @@ type Server struct {
 func NewServer(root_path string, bind string) *Server {
 	hubs := make(map[string]*Hub)
 	return &Server{
-		root_path: root_path,
-		bind:      bind,
-		hubs:      hubs,
+		root_path:     root_path,
+		bind:          bind,
+		hubs:          hubs,
 		shutdown_chan: make(chan time.Duration, 1),
 	}
 }
@@ -44,9 +48,15 @@ func (self *Server) Run() {
 		Handler: websocket.Handler(self.WSHandler),
 	}
 
-	log.Println("Server started", self.bind)
-	if err := self.http_server.ListenAndServe(); err != nil {
-		log.Printf("ListenAndServe: %v", err)
+	bindLog := sLog.WithFields(log.Fields{
+		"bind": self.bind,
+	})
+	bindLog.Info("Server started")
+
+	if err := self.http_server.ListenAndServe(); err != http.ErrServerClosed {
+		bindLog.Warn("Server stopped on error: ", err)
+	} else {
+		bindLog.WithFields(log.Fields{}).Info("Server stopped")
 	}
 }
 
@@ -54,7 +64,7 @@ func (self *Server) Shutdown() {
 	err := self.http_server.Shutdown(context.Background())
 	if err != nil {
 		// Error from closing listeners, or context timeout:
-		log.Printf("HTTP server Shutdown: %v", err)
+		sLog.Info("HTTP server Shutdown: %v", err)
 	}
 	// Shutdown in flight connections
 	self.shutdown_chan <- 0 // TODO parametrize timeout
@@ -83,13 +93,13 @@ func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
 
 	hub.Publish(data, tags...)
 	if err := websocket.Message.Send(ws, []byte("OK")); err != nil {
-		log.Println("[SEND]", err)
+		sLog.Warn("Unable to respond to publish query:", err)
 	}
 }
 
 func (self *Server) Ping(ws *websocket.Conn) {
 	if err := websocket.Message.Send(ws, []byte("pong")); err != nil {
-		log.Println("[PING]", err)
+		sLog.Warn("Unable to send ping message:", err)
 	}
 }
 
@@ -102,10 +112,10 @@ func (self *Server) Peers(ws *websocket.Conn) {
 	}
 	payload, err := netstring.EncodeString(peers...)
 	if err != nil {
-		log.Fatal(err)
+		sLog.Warn("Unable to encode message:", err)
 	}
 	if err := websocket.Message.Send(ws, payload); err != nil {
-		log.Println("[PEERS]", err)
+		sLog.Warn("Unable to respond to peer query:", err)
 	}
 }
 
@@ -140,11 +150,11 @@ func (self *Server) Subscribe(ws *websocket.Conn, args [][]byte) {
 		next_offset := strconv.FormatInt(msg.next_offset, 10)
 		payload, err := netstring.Encode(msg.data, []byte(next_offset))
 		if err != nil {
-			log.Println("[ENCODE SEND]", err)
+			sLog.Info("Unable to encode data", err)
 			break
 		}
 		if err := websocket.Message.Send(ws, payload); err != nil {
-			log.Println("[MSG SEND]", err)
+			sLog.Info("Unable to send data", err)
 			break
 		}
 		offset = msg.next_offset
@@ -166,17 +176,17 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 	for {
 		if err := websocket.Message.Receive(ws, &payload); err != nil {
 			if err != io.EOF {
-				log.Println("[RECEIVE]", err)
+				sLog.Warn("Receive error:\n\t", err)
 			}
 			break
 		}
 		items, err := netstring.Decode(payload)
 		if err != nil {
-			log.Println("[DECODE]", err)
+			sLog.Warn("Unable to decode:", err)
 			break
 		}
 		if len(items) == 0 {
-			log.Println("[EMPTY]")
+			sLog.Warn("Empty content")
 			continue
 		}
 		action := string(items[0])
@@ -190,7 +200,7 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 		case "peers":
 			self.Peers(ws)
 		default:
-			log.Println("[UNKNOWN]", action)
+			sLog.Warn("Unknown action:", action)
 		}
 
 	}

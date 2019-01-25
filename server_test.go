@@ -20,5 +20,3 @@ func TestServerPublish(t *testing.T) {
 		t.Error("Unexpected value:", answer)
 	}
 }
-
-

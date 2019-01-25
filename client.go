@@ -2,11 +2,15 @@ package franz
 
 import (
 	"bitbucket.org/bertrandchenal/netstring"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
 	"io"
-	"log"
 	// "time"
 )
+
+var cLog = log.WithFields(log.Fields{
+	"who": "Client",
+})
 
 type Client struct {
 	url string
@@ -28,11 +32,11 @@ func (self *Client) Publish(tube string, msg []byte) []byte {
 		msg,
 	)
 	if err != nil {
-		log.Fatal("[ENCODE]",err)
+		cLog.Fatal("Unable to encode publish message:\n\t", err)
 	}
 
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		log.Fatal("[SEND]", err)
+		cLog.Fatal("Unable to send publish message:\n\t", err)
 	}
 	websocket.Message.Receive(self.ws, &payload)
 	return payload
@@ -44,10 +48,10 @@ func (self *Client) Ping() bool {
 		[]byte("ping"),
 	)
 	if err != nil {
-		log.Fatal("[ENCODE]", err)
+		cLog.Fatal("Unable to encode ping message:\n\t", err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		log.Fatal("[SEND]", err)
+		cLog.Fatal("Unable to send ping message:\n\t", err)
 	}
 	websocket.Message.Receive(self.ws, &payload)
 	return string(payload) == "pong"
@@ -59,10 +63,10 @@ func (self *Client) Peers() []string {
 		[]byte("peers"),
 	)
 	if err != nil {
-		log.Fatal("[ENCODE]", err)
+		cLog.Fatal("Unable to encode peer message:\n\t", err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		log.Println("[SEND]", err)
+		cLog.Println("Unable to send peer message:\n\t", err)
 		return nil
 	}
 	websocket.Message.Receive(self.ws, &payload)
@@ -71,7 +75,7 @@ func (self *Client) Peers() []string {
 	items, err := netstring.DecodeString(payload)
 
 	if err != nil {
-		log.Println(err)
+		cLog.Println(err)
 		return nil
 	}
 	return items
@@ -87,10 +91,10 @@ func (self *Client) Subscribe(tube string) {
 		"0",
 	)
 	if err != nil {
-		log.Fatal(err)
+		cLog.Fatal(err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		log.Fatal(err)
+		cLog.Fatal(err)
 	}
 	for {
 		var payload []byte
@@ -103,9 +107,9 @@ func (self *Client) Subscribe(tube string) {
 			break
 		}
 		if err != nil {
-			log.Fatal(err)
+			cLog.Fatal(err)
 		}
-		log.Println("DATA", items)
+		cLog.Println("DATA", items)
 	}
 }
 
@@ -116,7 +120,7 @@ func (self *Client) Connect() {
 	ws, err := websocket.Dial(self.url, "", "http://example.com/")
 	self.ws = ws
 	if err != nil {
-		log.Print("Failed to connect")
+		cLog.Print("Failed to connect")
 		return
 	}
 

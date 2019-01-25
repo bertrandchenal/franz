@@ -1,9 +1,13 @@
 package franz
 
 import (
-	"log"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
+
+var mLog = log.WithFields(log.Fields{
+	"who": "Member",
+})
 
 const (
 	UP = iota
@@ -16,7 +20,7 @@ type PeerList []*Peer
 type Peer struct {
 	Client *Client
 	Status Status
-	Peers []string
+	Peers  []string
 }
 type Member struct {
 	Bind  string
@@ -46,14 +50,15 @@ func NewPeer(bind string) *Peer {
 	return &peer
 }
 
-
 func (self *Member) discover() {
 	for {
 		for _, peer := range self.Peers {
 			ok := peer.GetPeers()
 			// TODO update own list of peers
 			if !ok {
-				log.Println("Peer is down")
+				mLog.WithFields(log.Fields{
+					"remote": peer.Client.url,
+				}).Warn("Peer is down")
 			}
 		}
 		time.Sleep(1e9)
