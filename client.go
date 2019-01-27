@@ -8,17 +8,15 @@ import (
 	// "time"
 )
 
-var cLog = log.WithField("who", "Client")
-
 type Client struct {
 	url string
 	ws  *websocket.Conn
+	log *log.Entry
 }
 
 func NewClient(server_url string) *Client {
-	// origin := "http://localhost/"
-	// url := "ws://localhost:9090/ws"
-	return &Client{url: server_url}
+	log := NewLogger("client")
+	return &Client{url: server_url, log: log}
 }
 
 func (self *Client) Publish(tube string, msg []byte) []byte {
@@ -30,11 +28,11 @@ func (self *Client) Publish(tube string, msg []byte) []byte {
 		msg,
 	)
 	if err != nil {
-		cLog.Fatal("Unable to encode publish message:\n\t", err)
+		self.log.Fatal("Unable to encode publish message:\n\t", err)
 	}
 
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		cLog.Fatal("Unable to send publish message:\n\t", err)
+		self.log.Fatal("Unable to send publish message:\n\t", err)
 	}
 	websocket.Message.Receive(self.ws, &payload)
 	return payload
@@ -46,25 +44,25 @@ func (self *Client) Ping() bool {
 		[]byte("ping"),
 	)
 	if err != nil {
-		cLog.Fatal("Unable to encode ping message:\n\t", err)
+		self.log.Fatal("Unable to encode ping message:\n\t", err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		cLog.Fatal("Unable to send ping message:\n\t", err)
+		self.log.Fatal("Unable to send ping message:\n\t", err)
 	}
 	websocket.Message.Receive(self.ws, &payload)
 	return string(payload) == "pong"
 }
 
-func (self *Client) Peers() []string {
+func (self *Client) GetPeers() []string {
 	self.Connect()
 	payload, err := netstring.Encode(
-		[]byte("peers"),
+		[]byte("getpeers"),
 	)
 	if err != nil {
-		cLog.Fatal("Unable to encode peer message:\n\t", err)
+		self.log.Fatal("Unable to encode peer message:\n\t", err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		cLog.Println("Unable to send peer message:\n\t", err)
+		self.log.Println("Unable to send peer message:\n\t", err)
 		return nil
 	}
 	websocket.Message.Receive(self.ws, &payload)
@@ -73,7 +71,7 @@ func (self *Client) Peers() []string {
 	items, err := netstring.DecodeString(payload)
 
 	if err != nil {
-		cLog.Println(err)
+		self.log.Println(err)
 		return nil
 	}
 	return items
@@ -89,10 +87,10 @@ func (self *Client) Subscribe(tube string) {
 		"0",
 	)
 	if err != nil {
-		cLog.Fatal(err)
+		self.log.Fatal(err)
 	}
 	if err := websocket.Message.Send(self.ws, payload); err != nil {
-		cLog.Fatal(err)
+		self.log.Fatal(err)
 	}
 	for {
 		var payload []byte
@@ -105,9 +103,9 @@ func (self *Client) Subscribe(tube string) {
 			break
 		}
 		if err != nil {
-			cLog.Fatal(err)
+			self.log.Fatal(err)
 		}
-		cLog.Println("DATA", items)
+		self.log.Println("DATA", items)
 	}
 }
 
@@ -115,11 +113,13 @@ func (self *Client) Connect() {
 	if self.ws != nil {
 		return
 	}
-	ws, err := websocket.Dial(self.url, "", "http://example.com/")
-	self.ws = ws
-	if err != nil {
-		cLog.Print("Failed to connect")
-		return
+	for {
+		ws, err := websocket.Dial(self.url, "", "http://example.com/")
+		self.ws = ws
+		if err == nil {
+			return
+		}
+		self.log.Print("Failed to connect")
 	}
 
 	// Close all websockets on interrupt

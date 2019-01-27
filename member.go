@@ -1,11 +1,8 @@
 package franz
 
 import (
-	log "github.com/sirupsen/logrus"
 	"time"
 )
-
-var mLog = log.WithField("who", "Member")
 
 const (
 	UP = iota
@@ -13,48 +10,49 @@ const (
 )
 
 type Status int
-type PeerList []*Peer
 
 type Peer struct {
-	Client *Client
-	Status Status
-	Peers  []string
+	bind     string
+	client   *Client
+	status   Status
+	peers    []string
+	lastSeen int64
 }
 type Member struct {
-	Bind  string
-	Peers []*Peer
+	bind  string
+	peers map[string]*Peer
 }
 
 func NewMember(bind string, peers []string) *Member {
 	member := Member{
 		bind,
-		NewPeerList(peers),
+		NewPeerMap(peers),
 	}
 	go member.discover()
 	return &member
 }
 
-func NewPeerList(binds []string) PeerList {
-	peerList := make([]*Peer, len(binds))
-	for pos, bind := range binds {
-		peerList[pos] = NewPeer(bind)
+func NewPeerMap(binds []string) map[string]*Peer {
+	peerMap := make(map[string]*Peer)
+	for _, bind := range binds {
+		peerMap[bind] = NewPeer(bind)
 	}
-	return peerList
+	return peerMap
 }
 
 func NewPeer(bind string) *Peer {
 	client := NewClient("ws://" + bind + "/ws")
-	peer := Peer{client, UP, nil}
+	peer := Peer{bind: bind, client: client, status: UP}
 	return &peer
 }
 
 func (self *Member) discover() {
 	for {
-		for _, peer := range self.Peers {
-			ok := peer.GetPeers()
+		for _, peer := range self.peers {
+			ok := peer.Refresh()
 			// TODO update own list of peers
 			if !ok {
-				mLog.WithField("remote", peer.Client.url).Warn("Peer is down")
+				continue
 			}
 		}
 		time.Sleep(1e9)
@@ -65,15 +63,22 @@ func (self *Member) AddPeers(peers []string) {
 	// TODO
 }
 
-func (self *Peer) GetPeers() bool {
-	peers := self.Client.Peers() // FIXME may fail if remote is not yet up
+func (self *Peer) Refresh() bool {
+	// FIXME may fail if remote is not yet up -> use strict timeout!
+	peers := self.client.GetPeers()
 	ok := peers != nil
+	now := time.Now()
 	if ok {
-		self.Status = UP
-		self.Peers = peers
+		if len(peers) > 1 {
+			// TODO update siblings lastSeen
+			println(peers[0], peers[1])
+		}
+		self.status = UP
+		self.lastSeen = now.Unix()
+		self.peers = peers
 	} else {
 		// TODO we may want to retry a bit later before deciding on Status
-		self.Status = DOWN
+		self.status = DOWN
 	}
 	return ok
 }

@@ -3,15 +3,13 @@ package franz
 import (
 	"bitbucket.org/bertrandchenal/netstring"
 	"context"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
 )
-
-var sLog = log.WithField("who", "Server")
 
 type Server struct {
 	root_path     string
@@ -20,15 +18,18 @@ type Server struct {
 	shutdown_chan chan time.Duration
 	member        *Member
 	http_server   *http.Server
+	log           *logrus.Entry
 }
 
 func NewServer(root_path string, bind string) *Server {
 	hubs := make(map[string]*Hub)
+
 	return &Server{
 		root_path:     root_path,
 		bind:          bind,
 		hubs:          hubs,
 		shutdown_chan: make(chan time.Duration, 1),
+		log:           NewLogger("server"),
 	}
 }
 
@@ -46,7 +47,7 @@ func (self *Server) Run() {
 		Handler: websocket.Handler(self.WSHandler),
 	}
 
-	bindLog := sLog.WithField("bind", self.bind)
+	bindLog := self.log.WithField("bind", self.bind)
 	bindLog.Info("Server started")
 
 	if err := self.http_server.ListenAndServe(); err != http.ErrServerClosed {
@@ -60,7 +61,7 @@ func (self *Server) Shutdown() {
 	err := self.http_server.Shutdown(context.Background())
 	if err != nil {
 		// Error from closing listeners, or context timeout:
-		sLog.Info("HTTP server Shutdown: %v", err)
+		self.log.Info("HTTP server Shutdown: %v", err)
 	}
 	// Shutdown in flight connections
 	self.shutdown_chan <- 0 // TODO parametrize timeout
@@ -89,29 +90,34 @@ func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
 
 	hub.Publish(data, tags...)
 	if err := websocket.Message.Send(ws, []byte("OK")); err != nil {
-		sLog.Warn("Unable to respond to publish query:", err)
+		self.log.Warn("Unable to respond to publish query:", err)
 	}
 }
 
 func (self *Server) Ping(ws *websocket.Conn) {
 	if err := websocket.Message.Send(ws, []byte("pong")); err != nil {
-		sLog.Warn("Unable to send ping message:", err)
+		self.log.Warn("Unable to send ping message:", err)
 	}
 }
 
-func (self *Server) Peers(ws *websocket.Conn) {
-	peers := []string{}
+func (self *Server) GetPeers(ws *websocket.Conn) {
+	peer_info := []string{}
+	now := time.Now().Unix()
 	if self.member != nil {
-		for _, peer := range self.member.Peers {
-			peers = append(peers, peer.Client.url)
+		for _, peer := range self.member.peers {
+			delta := now - peer.lastSeen
+			lastSeen := strconv.FormatInt(delta, 10)
+			peer_info = append(peer_info, peer.bind, lastSeen)
 		}
 	}
-	payload, err := netstring.EncodeString(peers...)
+	payload, err := netstring.EncodeString(peer_info...)
 	if err != nil {
-		sLog.Warn("Unable to encode message:", err)
+		self.log.Warn("Unable to encode message:", err)
+		return
 	}
 	if err := websocket.Message.Send(ws, payload); err != nil {
-		sLog.Warn("Unable to respond to peer query:", err)
+		self.log.Warn("Unable to respond to peer query:", err)
+		return
 	}
 }
 
@@ -146,11 +152,11 @@ func (self *Server) Subscribe(ws *websocket.Conn, args [][]byte) {
 		next_offset := strconv.FormatInt(msg.next_offset, 10)
 		payload, err := netstring.Encode(msg.data, []byte(next_offset))
 		if err != nil {
-			sLog.Info("Unable to encode data", err)
+			self.log.Info("Unable to encode data", err)
 			break
 		}
 		if err := websocket.Message.Send(ws, payload); err != nil {
-			sLog.Info("Unable to send data", err)
+			self.log.Info("Unable to send data", err)
 			break
 		}
 		offset = msg.next_offset
@@ -172,17 +178,17 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 	for {
 		if err := websocket.Message.Receive(ws, &payload); err != nil {
 			if err != io.EOF {
-				sLog.Warn("Receive error:\n\t", err)
+				self.log.Warn("Receive error:\n\t", err)
 			}
 			break
 		}
 		items, err := netstring.Decode(payload)
 		if err != nil {
-			sLog.Warn("Unable to decode:", err)
+			self.log.Warn("Unable to decode:", err)
 			break
 		}
 		if len(items) == 0 {
-			sLog.Warn("Empty content")
+			self.log.Warn("Empty content")
 			continue
 		}
 		action := string(items[0])
@@ -193,10 +199,10 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 			self.Subscribe(ws, items[1:])
 		case "ping":
 			self.Ping(ws)
-		case "peers":
-			self.Peers(ws)
+		case "getpeers":
+			self.GetPeers(ws)
 		default:
-			sLog.Warn("Unknown action:", action)
+			self.log.Warn("Unknown action:", action)
 		}
 
 	}

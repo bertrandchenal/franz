@@ -37,8 +37,8 @@ func TestPing(t *testing.T) {
 	// Check if all servers are seeing each others
 	up_count := 0
 	for _, server := range servers {
-		for _, peer := range server.member.Peers {
-			if peer.Status == UP {
+		for _, peer := range server.member.peers {
+			if peer.status == UP {
 				up_count += 1
 			}
 		}
@@ -52,8 +52,8 @@ func TestPing(t *testing.T) {
 	time.Sleep(3e9)
 	up_count = 0
 	for _, server := range servers[1:] {
-		for _, peer := range server.member.Peers {
-			if peer.Status == UP {
+		for _, peer := range server.member.peers {
+			if peer.status == UP {
 				up_count += 1
 			}
 		}
