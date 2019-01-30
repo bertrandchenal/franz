@@ -37,7 +37,7 @@ func (self *Server) Join(peers []string) {
 	if self.member == nil {
 		self.member = NewMember(self.bind, peers)
 	} else {
-		self.member.AddPeers(peers)
+		self.member.AddPeers(peers...)
 	}
 }
 
@@ -61,7 +61,7 @@ func (self *Server) Shutdown() {
 	err := self.http_server.Shutdown(context.Background())
 	if err != nil {
 		// Error from closing listeners, or context timeout:
-		self.log.Info("HTTP server Shutdown: %v", err)
+		self.log.Info("HTTP server Shutdown:", err)
 	}
 	// Shutdown in flight connections
 	self.shutdown_chan <- 0 // TODO parametrize timeout

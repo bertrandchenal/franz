@@ -1,6 +1,7 @@
 package franz
 
 import (
+	"strconv"
 	"time"
 )
 
@@ -15,8 +16,8 @@ type Peer struct {
 	bind     string
 	client   *Client
 	status   Status
-	peers    []string
 	lastSeen int64
+	member   *Member
 }
 type Member struct {
 	bind  string
@@ -25,24 +26,23 @@ type Member struct {
 
 func NewMember(bind string, peers []string) *Member {
 	member := Member{
-		bind,
-		NewPeerMap(peers),
+		bind:  bind,
+		peers: make(map[string]*Peer),
 	}
+	member.AddPeers(peers...)
 	go member.discover()
 	return &member
 }
 
-func NewPeerMap(binds []string) map[string]*Peer {
-	peerMap := make(map[string]*Peer)
+func (self *Member) AddPeers(binds ...string) {
 	for _, bind := range binds {
-		peerMap[bind] = NewPeer(bind)
+		self.peers[bind] = NewPeer(bind, self)
 	}
-	return peerMap
 }
 
-func NewPeer(bind string) *Peer {
+func NewPeer(bind string, member *Member) *Peer {
 	client := NewClient("ws://" + bind + "/ws")
-	peer := Peer{bind: bind, client: client, status: UP}
+	peer := Peer{bind: bind, client: client, status: UP, member: member}
 	return &peer
 }
 
@@ -59,26 +59,30 @@ func (self *Member) discover() {
 	}
 }
 
-func (self *Member) AddPeers(peers []string) {
-	// TODO
-}
-
 func (self *Peer) Refresh() bool {
 	// FIXME may fail if remote is not yet up -> use strict timeout!
-	peers := self.client.GetPeers()
-	ok := peers != nil
+	binds := self.client.GetPeers()
+	ok := binds != nil
+	ok = ok && len(binds)%2 == 0
 	now := time.Now()
-	if ok {
-		if len(peers) > 1 {
-			// TODO update siblings lastSeen
-			println(peers[0], peers[1])
-		}
-		self.status = UP
-		self.lastSeen = now.Unix()
-		self.peers = peers
-	} else {
-		// TODO we may want to retry a bit later before deciding on Status
+	if !ok {
 		self.status = DOWN
+		return false
 	}
-	return ok
+	for i := 0; i < len(binds); i++ {
+		bind := binds[i]
+		p, exists := self.member.peers[bind]
+		if !exists {
+			continue // TODO call AddPeers
+		}
+		lastSeen, err := strconv.Atoi(binds[i+1])
+		if err != nil {
+			continue
+		}
+		p.lastSeen = now.Unix() - int64(lastSeen)
+	}
+	self.status = UP
+	self.lastSeen = now.Unix()
+
+	return true
 }
