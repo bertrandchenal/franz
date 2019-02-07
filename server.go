@@ -169,7 +169,7 @@ func (self *Server) WSHandler(ws *websocket.Conn) {
 		// Add quick deadline when server closes
 		nb_seconds := <-self.shutdown_chan
 		// TODO SEND message warning client
-		ws.SetDeadline(time.Now().Add(nb_seconds * time.Minute))
+		ws.SetDeadline(time.Now().Add(nb_seconds * time.Second))
 		// Pass it forward
 		self.shutdown_chan <- nb_seconds
 	}()

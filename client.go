@@ -5,7 +5,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
 	"io"
-	// "time"
+	"time"
 )
 
 type Client struct {
@@ -115,12 +115,13 @@ func (self *Client) Connect() {
 	}
 	for {
 		ws, err := websocket.Dial(self.url, "", "http://example.com/")
-		self.ws = ws
 		if err == nil {
+			self.ws = ws
 			return
 		}
-		self.log.Print("Failed to connect")
+		time.Sleep(5e8)
 	}
+	self.log.Print("Failed to connect")
 
 	// Close all websockets on interrupt
 	// c := make(chan os.Signal, 1)

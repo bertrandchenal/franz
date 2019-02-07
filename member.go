@@ -18,6 +18,7 @@ type Peer struct {
 	status   Status
 	lastSeen int64
 	member   *Member
+	quitChan chan bool
 }
 type Member struct {
 	bind  string
@@ -30,50 +31,62 @@ func NewMember(bind string, peers []string) *Member {
 		peers: make(map[string]*Peer),
 	}
 	member.AddPeers(peers...)
-	go member.discover()
 	return &member
 }
 
 func (self *Member) AddPeers(binds ...string) {
 	for _, bind := range binds {
-		self.peers[bind] = NewPeer(bind, self)
+		peer := NewPeer(bind, self)
+		self.peers[bind] = peer
+		go peer.backgroundRefresh()
 	}
+}
+
+func (self *Member) RemovePeer(bind string) {
+	self.peers[bind].quitChan <- true
 }
 
 func NewPeer(bind string, member *Member) *Peer {
 	client := NewClient("ws://" + bind + "/ws")
-	peer := Peer{bind: bind, client: client, status: UP, member: member}
+	peer := Peer{
+		bind:     bind,
+		client:   client,
+		status:   UP,
+		member:   member,
+		quitChan: make(chan bool, 1),
+	}
 	return &peer
 }
 
-func (self *Member) discover() {
+func (self *Peer) backgroundRefresh() {
+	// Long-running method to keep peering info up to date
 	for {
-		for _, peer := range self.peers {
-			ok := peer.Refresh()
-			// TODO update own list of peers
-			if !ok {
-				continue
-			}
+		select {
+		case <-self.quitChan:
+			return
+		default:
+			self.Refresh()
 		}
 		time.Sleep(1e9)
 	}
 }
 
-func (self *Peer) Refresh() bool {
-	// FIXME may fail if remote is not yet up -> use strict timeout!
+func (self *Peer) Refresh() {
+	// Ask remote for its peer list
+	now := time.Now()
 	binds := self.client.GetPeers()
 	ok := binds != nil
 	ok = ok && len(binds)%2 == 0
-	now := time.Now()
 	if !ok {
-		self.status = DOWN
-		return false
+		return
 	}
-	for i := 0; i < len(binds); i++ {
+	// Update local info
+	for i := 0; i < len(binds); i += 2 {
 		bind := binds[i]
 		p, exists := self.member.peers[bind]
 		if !exists {
-			continue // TODO call AddPeers
+			self.member.AddPeers(bind)
+			continue
 		}
 		lastSeen, err := strconv.Atoi(binds[i+1])
 		if err != nil {
@@ -81,8 +94,5 @@ func (self *Peer) Refresh() bool {
 		}
 		p.lastSeen = now.Unix() - int64(lastSeen)
 	}
-	self.status = UP
 	self.lastSeen = now.Unix()
-
-	return true
 }

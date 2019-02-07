@@ -32,13 +32,16 @@ func setup(binds []string) []*Server {
 func TestPing(t *testing.T) {
 	binds := []string{"localhost:9090", "localhost:9091", "localhost:9092"}
 	servers := setup(binds)
-	time.Sleep(2e9)
+	delay := int64(2)
+	// Sleep a bit to let servers discover each others
+	time.Sleep(time.Duration(delay) * time.Second)
 
 	// Check if all servers are seeing each others
 	up_count := 0
+	now := time.Now().Unix()
 	for _, server := range servers {
 		for _, peer := range server.member.peers {
-			if peer.status == UP {
+			if peer.lastSeen >= now-delay {
 				up_count += 1
 			}
 		}
@@ -49,11 +52,12 @@ func TestPing(t *testing.T) {
 
 	// Stop one server
 	servers[0].Shutdown()
-	time.Sleep(3e9)
+	time.Sleep(time.Duration(delay) * time.Second)
 	up_count = 0
+	now = time.Now().Unix()
 	for _, server := range servers[1:] {
 		for _, peer := range server.member.peers {
-			if peer.status == UP {
+			if peer.lastSeen > now-delay {
 				up_count += 1
 			}
 		}
