@@ -1,7 +1,7 @@
 # Franz
 
-Franz is an experimental implementation of a stream (or log) server,
-a concept that was popularized by Apacha Kafka.
+
+Franz is an golang implementation of a stream server.
 
 
 ## Motivation
@@ -16,5 +16,5 @@ Provide a Kafka-like solution that is easy to deploy and easy to use:
 
 ## What is missing (aka the difficult stuff)
 
-  - Replication of partitions
+  - Replication of partitions (in progress)
   - Support for consumer groups
