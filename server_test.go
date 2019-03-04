@@ -19,4 +19,5 @@ func TestServerPublish(t *testing.T) {
 	if string(answer) != "OK" {
 		t.Error("Unexpected value:", answer)
 	}
+	// TODO check _log content
 }

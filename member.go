@@ -1,8 +1,10 @@
 package franz
 
 import (
+	"sort"
 	"strconv"
 	"time"
+	"crypto/md5"
 )
 
 const (
@@ -20,9 +22,15 @@ type Peer struct {
 	member   *Member
 	quitChan chan bool
 }
+
 type Member struct {
 	bind  string
 	peers map[string]*Peer
+}
+
+type Shard struct {
+	sum  string
+	peer *Peer
 }
 
 func NewMember(bind string, peers []string) *Member {
@@ -45,6 +53,23 @@ func (self *Member) AddPeers(binds ...string) {
 func (self *Member) RemovePeer(bind string) {
 	self.peers[bind].quitChan <- true
 }
+
+func (self *Member) HashRing() []*Shard {
+	nbShards := 5
+	shards := make([]*Shard, len(self.peers) * nbShards)
+	peerCount := 0
+	for _, peer := range self.peers {
+		h := md5.Sum([]byte(peer.bind))
+		for i := 0; i < nbShards; i++ {
+			shards[peerCount * nbShards + i] = &Shard{string(h), peer}
+			h = md5.Sum(h)
+			peerCount += 1
+		}
+	}
+	sort.Sort(shards)
+	return shards
+}
+
 
 func NewPeer(bind string, member *Member) *Peer {
 	client := NewClient("ws://" + bind + "/ws")
@@ -88,11 +113,26 @@ func (self *Peer) Refresh() {
 			self.member.AddPeers(bind)
 			continue
 		}
-		lastSeen, err := strconv.Atoi(binds[i+1])
+		delta, err := strconv.Atoi(binds[i+1])
 		if err != nil {
 			continue
 		}
-		p.lastSeen = now.Unix() - int64(lastSeen)
+		lastSeen := now.Unix() - int64(delta)
+		if lastSeen > p.lastSeen {
+			p.lastSeen = lastSeen
+		}
 	}
 	self.lastSeen = now.Unix()
+}
+
+
+// Makes Shards sortable
+func (shards *[]Shard) Len() int {
+	return len(shards)
+}
+func (shards *[]Shard) Swap(i, j int) {
+	shards[i], shards[j] = shards[j], shards[i]
+}
+func (shards *[]Shard) Less(i, j int) bool {
+	return shards[i].sum < shards[j].sum
 }

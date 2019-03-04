@@ -16,6 +16,7 @@ import (
 )
 
 const MaxBucketSize = int64(4294967294) // 2^32-1
+var newMutex = sync.Mutex{}
 
 type Bucket struct {
 	Offset    int64 // start offset (in tube) of the bucket
@@ -84,6 +85,9 @@ func ScanBuckets(root string) BucketList {
 }
 
 func NewBucket(offset int64, size int64, timestamp int64) *Bucket {
+	newMutex.Lock()
+	defer newMutex.Unlock()
+
 	name := strconv.FormatInt(offset, 16)
 	return &Bucket{offset, size, timestamp, name}
 }

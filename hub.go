@@ -43,10 +43,8 @@ func NewHub(tube *Tube) *Hub {
 		mutex:       &sync.Mutex{},
 		tube:        tube,
 	}
-	// Start 3 schedulers
-	for i := 0; i < 3; i++ {
-		go hub.Scheduler()
-	}
+	// Start scheduler
+	go hub.Scheduler()
 	return hub
 }
 

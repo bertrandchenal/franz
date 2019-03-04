@@ -23,7 +23,7 @@ func setup(binds []string) []*Server {
 		root := TEST_DIR
 		server := NewServer(root, bind)
 		go server.Run()
-		go server.Join(others)
+		server.Join(others)
 		servers[pos] = server
 	}
 	return servers
@@ -65,5 +65,4 @@ func TestPing(t *testing.T) {
 	if up_count != 2 {
 		t.Errorf("Expected 2, got: %v", up_count)
 	}
-
 }

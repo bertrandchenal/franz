@@ -7,6 +7,7 @@ import (
 	"golang.org/x/net/websocket"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -68,8 +69,16 @@ func (self *Server) Shutdown() {
 }
 
 func (self *Server) GetHub(name string) *Hub {
+	// Validating version of self.getHub
+	match, _ := regexp.MatchString("^[a-z]+$", name)
+	if !match {
+		return nil // TODO return error
+	}
+	return self.getHub(name)
+}
+
+func (self *Server) getHub(name string) *Hub {
 	// TODO should use a lock to prevent double-opening of the same hub
-	// TODO sanitize name!
 	hub, found := self.hubs[name]
 	if !found {
 		tube := NewTube(self.root_path, name)
@@ -86,6 +95,12 @@ func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
 	tags := []string{}
 	for _, tag := range args[2:] {
 		tags = append(tags, string(tag))
+	}
+	if hub.tube.Len == 0 && name[0] != '_' {
+		// Advertise first publication
+		logHub := self.getHub("_log")
+		data := []byte("New tube!")
+		logHub.Publish(data)
 	}
 
 	hub.Publish(data, tags...)
