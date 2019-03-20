@@ -89,14 +89,24 @@ func (self *Server) getHub(name string) *Hub {
 }
 
 func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
-	name := string(args[0])
+	// First item in args is tube name, second is payload, all other
+	// args are tags
+	if self.member != nil {
+		peer := self.member.FindPeer(args[0])
+		if peer.bind != self.bind {
+			self.Forward(ws, args, peer)
+			return
+		}
+	}
+
+	tubeName := string(args[0])
 	data := args[1]
-	hub := self.GetHub(name)
+	hub := self.GetHub(tubeName)
 	tags := []string{}
 	for _, tag := range args[2:] {
 		tags = append(tags, string(tag))
 	}
-	if hub.tube.Len == 0 && name[0] != '_' {
+	if hub.tube.Len == 0 && tubeName[0] != '_' {
 		// Advertise first publication
 		logHub := self.getHub("_log")
 		data := []byte("New tube!")
@@ -108,6 +118,13 @@ func (self *Server) Publish(ws *websocket.Conn, args [][]byte) {
 		self.log.Warn("Unable to respond to publish query:", err)
 	}
 }
+
+func (self *Server) Forward(ws *websocket.Conn, args [][]byte, peer *Peer) {
+	// Forward message contained in args to peer. If for any reason
+	// peer is not available (or refuse the message) the message is
+	// temporarily saved in a local tube
+}
+
 
 func (self *Server) Ping(ws *websocket.Conn) {
 	if err := websocket.Message.Send(ws, []byte("pong")); err != nil {

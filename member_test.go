@@ -26,15 +26,15 @@ func setup(binds []string) []*Server {
 		server.Join(others)
 		servers[pos] = server
 	}
+	// Sleep a bit to let servers discover each others
+	time.Sleep(time.Duration(2) * time.Second)
 	return servers
 }
 
 func TestPing(t *testing.T) {
+	delay := int64(2)
 	binds := []string{"localhost:9090", "localhost:9091", "localhost:9092"}
 	servers := setup(binds)
-	delay := int64(2)
-	// Sleep a bit to let servers discover each others
-	time.Sleep(time.Duration(delay) * time.Second)
 
 	// Check if all servers are seeing each others
 	up_count := 0
@@ -65,4 +65,16 @@ func TestPing(t *testing.T) {
 	if up_count != 2 {
 		t.Errorf("Expected 2, got: %v", up_count)
 	}
+}
+
+func TestSharding(t *testing.T) {
+	binds := []string{"localhost:9090", "localhost:9091", "localhost:9092"}
+	servers := setup(binds)
+	firstServer := servers[0]
+	// for pos, item := range firstServer.member.ring {
+	// 	println(pos, item.sum, item.peer.bind)
+	// }
+
+	// TODO publish messages in different tubes and check servers
+	// where those messages landed
 }

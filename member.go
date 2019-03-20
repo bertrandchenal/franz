@@ -1,10 +1,10 @@
 package franz
 
 import (
+	"hash/crc32"
 	"sort"
 	"strconv"
 	"time"
-	"crypto/md5"
 )
 
 const (
@@ -13,7 +13,7 @@ const (
 )
 
 type Status int
-
+type ShardList []*Shard
 type Peer struct {
 	bind     string
 	client   *Client
@@ -26,10 +26,11 @@ type Peer struct {
 type Member struct {
 	bind  string
 	peers map[string]*Peer
+	ring  ShardList
 }
 
 type Shard struct {
-	sum  string
+	sum  uint32
 	peer *Peer
 }
 
@@ -48,28 +49,51 @@ func (self *Member) AddPeers(binds ...string) {
 		self.peers[bind] = peer
 		go peer.backgroundRefresh()
 	}
+	// TODO couple ring refresh with peer status (wait for peer list
+	// to stabilize before updating ring)
+	self.ring = self.HashRing()
 }
 
 func (self *Member) RemovePeer(bind string) {
 	self.peers[bind].quitChan <- true
 }
 
-func (self *Member) HashRing() []*Shard {
+func (self *Member) HashRing() ShardList {
+	// Compute several
 	nbShards := 5
-	shards := make([]*Shard, len(self.peers) * nbShards)
+	shards := make(ShardList, len(self.peers)*nbShards)
 	peerCount := 0
-	for _, peer := range self.peers {
-		h := md5.Sum([]byte(peer.bind))
+	padding := []byte("pad")
+	for bindString, peer := range self.peers {
+		bind := []byte(bindString)
 		for i := 0; i < nbShards; i++ {
-			shards[peerCount * nbShards + i] = &Shard{string(h), peer}
-			h = md5.Sum(h)
+			h := crc32.ChecksumIEEE(bind)
+			shards[peerCount] = &Shard{h, peer}
 			peerCount += 1
+			bind = append(bind, padding...)
 		}
 	}
 	sort.Sort(shards)
 	return shards
 }
 
+func (self *Member) FindPeer(tubeName []byte) *Peer {
+	// TODO implement lock around the ring (when updating it & when
+	// findpeer is called.
+
+	// Find the shard closest to tubeName checksum and return the
+	// corresponding peer.
+	h := crc32.ChecksumIEEE(tubeName)
+	pos := sort.Search(len(self.ring), func(i int) bool {
+		shard := self.ring[i]
+		return shard.sum >= h
+	})
+	if pos == len(self.ring) {
+		pos = 0
+	}
+
+	return self.ring[pos].peer
+}
 
 func NewPeer(bind string, member *Member) *Peer {
 	client := NewClient("ws://" + bind + "/ws")
@@ -125,14 +149,13 @@ func (self *Peer) Refresh() {
 	self.lastSeen = now.Unix()
 }
 
-
 // Makes Shards sortable
-func (shards *[]Shard) Len() int {
+func (shards ShardList) Len() int {
 	return len(shards)
 }
-func (shards *[]Shard) Swap(i, j int) {
+func (shards ShardList) Swap(i, j int) {
 	shards[i], shards[j] = shards[j], shards[i]
 }
-func (shards *[]Shard) Less(i, j int) bool {
+func (shards ShardList) Less(i, j int) bool {
 	return shards[i].sum < shards[j].sum
 }
