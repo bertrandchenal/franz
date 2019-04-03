@@ -125,7 +125,6 @@ func (self *Server) Forward(ws *websocket.Conn, args [][]byte, peer *Peer) {
 	// temporarily saved in a local tube
 }
 
-
 func (self *Server) Ping(ws *websocket.Conn) {
 	if err := websocket.Message.Send(ws, []byte("pong")); err != nil {
 		self.log.Warn("Unable to send ping message:", err)

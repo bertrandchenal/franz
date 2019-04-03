@@ -59,7 +59,7 @@ func (self *Member) RemovePeer(bind string) {
 }
 
 func (self *Member) HashRing() ShardList {
-	// Compute several
+	// Compute several hashes per peer
 	nbShards := 5
 	shards := make(ShardList, len(self.peers)*nbShards)
 	peerCount := 0

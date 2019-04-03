@@ -71,10 +71,24 @@ func TestSharding(t *testing.T) {
 	binds := []string{"localhost:9090", "localhost:9091", "localhost:9092"}
 	servers := setup(binds)
 	firstServer := servers[0]
-	// for pos, item := range firstServer.member.ring {
-	// 	println(pos, item.sum, item.peer.bind)
-	// }
+	firstRing := firstServer.member.ring
+	// Check that hash rings are in sync
+	for server_pos, server := range servers[1:] {
+		for pos, item := range server.member.ring {
+			if item.sum != firstRing[pos].sum {
+				t.Errorf(
+					"Rings mismatch between first server and server %v at position %v",
+					server_pos, pos)
+			}
+		}
+	}
 
-	// TODO publish messages in different tubes and check servers
-	// where those messages landed
+	servers[2].Shutdown()
+	time.Sleep(time.Duration(2) * time.Second)
+	for pos, item := range servers[1].member.ring {
+		if item.sum != firstRing[pos].sum {
+			t.Errorf("Rings mismatch between servers at position %v", pos)
+		}
+	}
+
 }
