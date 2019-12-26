@@ -46,8 +46,9 @@ func TestPing(t *testing.T) {
 			}
 		}
 	}
-	if up_count != 6 {
-		t.Errorf("Expected 6, got: %v", up_count)
+	expected := len(binds) * len(binds)
+	if up_count != expected {
+		t.Errorf("Expected %v, got: %v", expected, up_count)
 	}
 
 	// Stop one server
@@ -62,8 +63,9 @@ func TestPing(t *testing.T) {
 			}
 		}
 	}
-	if up_count != 2 {
-		t.Errorf("Expected 2, got: %v", up_count)
+	expected = (len(binds) - 1) * (len(binds) - 1)
+	if up_count != expected {
+		t.Errorf("Expected %v, got: %v", expected, up_count)
 	}
 }
 
