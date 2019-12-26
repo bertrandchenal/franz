@@ -31,6 +31,12 @@ func setup(binds []string) []*Server {
 	return servers
 }
 
+func tearDown(servers []*Server) {
+	for _, server := range servers {
+		server.Shutdown()
+	}
+}
+
 func TestPing(t *testing.T) {
 	delay := int64(2)
 	binds := []string{"localhost:9090", "localhost:9091", "localhost:9092"}
@@ -67,6 +73,8 @@ func TestPing(t *testing.T) {
 	if up_count != expected {
 		t.Errorf("Expected %v, got: %v", expected, up_count)
 	}
+
+	tearDown(servers[1:])
 }
 
 func TestSharding(t *testing.T) {
@@ -92,5 +100,5 @@ func TestSharding(t *testing.T) {
 			t.Errorf("Rings mismatch between servers at position %v", pos)
 		}
 	}
-
+	tearDown(servers[:2])
 }
