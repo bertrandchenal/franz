@@ -41,7 +41,7 @@ func NewHub(tube *Tube) *Hub {
 		sub_chan:    make(chan *Ticket, 1),
 		ticket_pool: make([]*Ticket, 0, 1),
 		mutex:       &sync.Mutex{},
-		tube:        tube,
+		tube:        tube, // TODO list of tubes
 	}
 	// Start scheduler
 	go hub.Scheduler()
@@ -83,12 +83,12 @@ func (self *Hub) Broadcast(new_ticket *Ticket) {
 	new_pool := make([]*Ticket, 0, 5)
 	for _, ticket := range self.ticket_pool {
 		// Early return if offset is too large
-		if ticket.offset >= self.tube.Len {
+		if ticket.offset >= self.tube.Len { // TODO implement MaxLen (loop across tubes)
 			new_pool = append(new_pool, ticket)
 			continue
 		}
 		// Answer to subscribers
-		next_offset, data, err := self.tube.Read(ticket.offset,
+		next_offset, data, err := self.tube.Read(ticket.offset, // TODO implemennt self.Read that will loop on tubes
 			ticket.timestamp, ticket.tags...)
 		if err != nil {
 			panic(err)
