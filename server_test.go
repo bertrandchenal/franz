@@ -17,7 +17,7 @@ func TestServerPublish(t *testing.T) {
 	msg := []byte("hello")
 	answer := client.Publish("test", msg)
 	if string(answer) != "OK" {
-		t.Error("Unexpected value:", answer)
+		t.Error("Unexpected value:", string(answer))
 	}
 	// TODO check _log content
 }
