@@ -1,7 +1,7 @@
 package franz
 
 import (
-	"bitbucket.org/bertrandchenal/netstring"
+	"github.com/bertrandchenal/netstring"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/websocket"
 	"io"

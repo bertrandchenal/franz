@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bitbucket.org/bertrandchenal/franz"
+	"github.com/bertrandchenal/franz"
 	"bytes"
 	"flag"
 	"fmt"
