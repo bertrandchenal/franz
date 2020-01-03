@@ -14,30 +14,77 @@ Provide a Kafka-like solution that is easy to deploy and easy to use:
     used across web proxies.
 
 
-## What is missing (aka the difficult stuff)
+# Replication & concurrency
+
+Peers binds are put in a consitent hash, and this hash is used to
+associate them with labels. So for example when a label is created
+every peer knows which one is reponsible for it (aka primary peer).
+
+When one or several peer is lost this association change, and may
+result in a split-brain situation. In this case each sub-group (or
+partition) will redefine this label-to-peer association and forward
+writes accordingly.
+
+
+## Branches
+
+When a parition appears we have a branching situation, because just
+like with a DVCS, concurrent writes will happen in different sub-group
+of the network split.
+
+Each primary peer keep track of branches in a special branch tube. A
+row is added in this branch tube each time a (normal) tube is created,
+stopped or branched from another peer.
+
+A row encodes a relation between two buckets. It's a tuple containing:
+
+- old peer id
+- new peer id
+- old end offset
+- new start offset
+- flags
+
+
+In this tuple old peer is always different than new peer (if not there
+would be no branching needed), similarly new offset is always greater
+than old offset. The only exception is when a new label is created, in
+this case old peer id, old offest and new offset are all equal to
+zero, only new peer id contains information (the actuall peer where
+the first message will be written).
+
+The flags tells if the current branch is the master copy of the data
+or if it's a replica.
+
+Each peer continually query all the other peers to fetch updates from
+their branch tube, and update its local copies. This ensure that every
+peer has a knowledge of all existing labels, and incidentaly this will
+detect any peer failure.
+
+The primary peer for a given label is also repsonsible to detect that
+the main copy is under-replicated and decide to replicate it.
+
+
+## Reads
+
+When a label is read (at offset 0 or any later offset), the branch
+tubes for this label are read and corresponding tubes are queried.
+
+
+## Writes
+
+When a new label is created of when a node is out of capacity, the
+responsible peer will select 3 random peers and choose the one with
+the biggest amount of free space. The decision will be added to the
+branch tube and payload forwarded to the selected peer.
+
+In a normal situation, the latest info for the corresponding branch
+tube tells on which peer to append the message. This peer wont change
+as long as the set of peers does not change and the peer still has
+disk capacity.
+
+
+# What is missing (aka the difficult stuff)
 
   - Replication of partitions (in progress)
   - Support for consumer groups
 
-# Replication Ideas
-
-- At least 3 peers, default redundancy: 3 copies
-- When a tube is created the "gateway" peer pick a candidate peer
-  based on current load and wait a quorum of ack to green light the
-  tube creation. By default that peer stays the first replica (the
-  master) for the full life of the tube, it will contain the full copy
-  of it and will support all the writes. Other nodes will replicate
-  this tube in a lazy fashion.
-- Each peer has to have a meta tube that tells which segments are
-  replicated on the current tube, this tube also have to be
-  replicated.
-- If a machine dies, new masters will have to be elected for the
-  orphan tubes (each peer will pick a random one and ask for a
-  quorum). This also means that the historical segment are fragmented
-  across the cluster there is no one peer with a continuous history,
-  but as this part is read-only anyway, it is not an issue.
-- For the duration of an election (that can be infinite if a quorum is
-  not possible, because to many nodes are down), each gateway node
-  receiving writes will buffer those in a tube. It can be configured
-  with a short turnover (with short segment that are deleted as soon
-  as possible)
