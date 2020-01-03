@@ -37,11 +37,11 @@ type Hub struct {
 
 func NewHub(tube *Tube) *Hub {
 	hub := &Hub{
-		pub_chan:    make(chan *Message, 1),
-		sub_chan:    make(chan *Ticket, 1),
+		pub_chan:    make(chan *Message, 0),
+		sub_chan:    make(chan *Ticket, 0),
 		ticket_pool: make([]*Ticket, 0, 1),
 		mutex:       &sync.Mutex{},
-		tube:        tube, // TODO list of tubes
+		tube:        tube, // TODO list or map of tubes
 	}
 	// Start scheduler
 	go hub.Scheduler()
