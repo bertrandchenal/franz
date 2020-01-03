@@ -15,7 +15,8 @@ import (
 	"time"
 )
 
-const MaxBucketSize = int64(4294967294) // 2^32-1
+const MaxBucketSize = int64(4294967296) // 2^32 = 4G
+const BaseBucketSize = int64(268435455) // 2^8 * 2^20 = 256M
 var newMutex = sync.Mutex{}
 
 type Bucket struct {
@@ -134,7 +135,7 @@ func (self *Tube) TailBucket(chunk_size int64, now int64) *Bucket {
 	// place enough for the chunk size) or create a new one.
 
 	if chunk_size > MaxBucketSize {
-		panic("Chunk size bigger that MaxBucketSize")
+		panic("Chunk size bigger that MaxBucketSize") //FIXME return error
 	}
 
 	// No bucket yet, create it
@@ -144,10 +145,9 @@ func (self *Tube) TailBucket(chunk_size int64, now int64) *Bucket {
 		return new_bucket
 	}
 
-	// Check if the tail bucket has enough place left for the chunk
-	// size
+	// Check if the tail bucket has enough place left
 	tail_bucket := self.buckets[len(self.buckets)-1]
-	if tail_bucket.Size+chunk_size > MaxBucketSize {
+	if tail_bucket.Size+chunk_size > BaseBucketSize {
 		new_bucket := NewBucket(tail_bucket.Offset+tail_bucket.Size, 0, now)
 		self.buckets = append(self.buckets, new_bucket)
 		return new_bucket
